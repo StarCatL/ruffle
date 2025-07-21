@@ -109,14 +109,14 @@ jobs:
           - build_name: linux-x86_64
             os: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-            FEATURES: sandbox,jpegxr  # 移除了无效特性
-            NO_DEFAULT_FEATURES: false  # 改为 false
+            FEATURES: sandbox,jpegxr
+            NO_DEFAULT_FEATURES: false
 
           - build_name: linux-aarch64
             os: ubuntu-24.04
             target: aarch64-unknown-linux-musl
-            FEATURES: sandbox,jpegxr  # 移除了无效特性
-            NO_DEFAULT_FEATURES: false  # 改为 false
+            FEATURES: sandbox,jpegxr
+            NO_DEFAULT_FEATURES: false
 
           # Mac does two Rust builds to make a universal binary
           - build_name: macos-x86_64
@@ -185,6 +185,13 @@ jobs:
       - name: Install musl target
         if: contains(matrix.target, 'linux-musl')
         run: rustup target add ${{ matrix.target }}
+
+      - name: Set cross-compilation environment (aarch64 only)
+        if: matrix.target == 'aarch64-unknown-linux-musl'
+        run: |
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+          echo "PKG_CONFIG_SYSROOT_DIR=/usr/local/aarch64--musl--stable-2023.11-1/aarch64-buildroot-linux-musl/sysroot" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/local/aarch64--musl--stable-2023.11-1/aarch64-buildroot-linux-musl/sysroot/usr/lib/pkgconfig" >> $GITHUB_ENV
 
       - name: Set linker for musl targets
         if: contains(matrix.target, 'linux-musl')
@@ -411,9 +418,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # The first couple steps of this and the `build-web-demo-and-selfhosted` job
-  # (tool setup and dependency install) are identical. Hopefully in the future
-  # https://github.com/actions/runner/issues/1182 can help deduplicate them.
   build-browser-extensions:
     name: Build browser extensions
     needs: create-nightly-release
