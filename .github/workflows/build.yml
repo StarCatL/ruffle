@@ -170,29 +170,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools musl-dev
           
-          # 安装 aarch64 交叉编译器 - 使用更可靠的镜像源
+          # 安装 aarch64 交叉编译器 - 使用可靠的 bootlin 工具链
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
-            echo "安装 aarch64 musl 交叉编译工具链..."
-            
-            # 尝试多个镜像源
-            set +e
-            wget https://github.com/richfelker/musl-cross-make/releases/download/v1.2.4/aarch64-linux-musl-cross.tgz \
-              || wget https://s3.amazonaws.com/muslcross/aarch64-linux-musl-cross.tgz \
-              || wget https://musl.cc/aarch64-linux-musl-cross.tgz
-            
-            # 如果所有镜像都失败，使用备用方法
-            if [ ! -f aarch64-linux-musl-cross.tgz ]; then
-              echo "常规下载失败，使用 Docker 方法创建工具链..."
-              sudo apt-get install -y docker.io
-              docker run --rm -v $(pwd):/workdir -w /workdir messense/rust-musl-cross:latest \
-                sh -c "tar czf aarch64-linux-musl-cross.tgz aarch64-linux-musl-cross"
-            fi
-            
-            set -e
+            echo "安装 aarch64 musl 交叉编译工具链 (来自 bootlin)..."
+            # 下载 bootlin 的预编译工具链
+            wget https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/aarch64--musl--stable-2023.11-1.tar.bz2
             
             # 解压并设置路径
-            sudo tar xf aarch64-linux-musl-cross.tgz -C /usr/local
-            echo "/usr/local/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
+            sudo tar xf aarch64--musl--stable-2023.11-1.tar.bz2 -C /usr/local
+            echo "/usr/local/aarch64--musl--stable-2023.11-1/bin" >> $GITHUB_PATH
             echo "工具链安装完成"
           fi
 
@@ -206,7 +192,7 @@ jobs:
           if [ "${{ matrix.target }}" = "x86_64-unknown-linux-musl" ]; then
             echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc" >> $GITHUB_ENV
           elif [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
-            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> $GITHUB_ENV
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gcc" >> $GITHUB_ENV
           fi
 
       - name: Install Rust toolchain
