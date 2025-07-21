@@ -113,7 +113,7 @@ jobs:
             NO_DEFAULT_FEATURES: true
 
           - build_name: linux-aarch64
-            os: ubuntu-24.04-arm
+            os: ubuntu-24.04
             target: aarch64-unknown-linux-musl
             FEATURES: desktop,sandbox,jpegxr,audio-null
             NO_DEFAULT_FEATURES: true
@@ -163,9 +163,32 @@ jobs:
       - name: Apply nightly release patch
         run: git apply --verbose /tmp/nightly-release.patch
 
-      - name: Install musl target (Linux only)
+      - name: Install musl toolchain (Linux only)
+        if: contains(matrix.target, 'linux-musl')
+        run: |
+          # 安装 musl 工具链
+          sudo apt-get update
+          sudo apt-get install -y musl-tools musl-dev
+          
+          # 安装 aarch64 交叉编译器
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            wget https://musl.cc/aarch64-linux-musl-cross.tgz
+            sudo tar xf aarch64-linux-musl-cross.tgz -C /usr/local
+            echo "/usr/local/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Install musl target
         if: contains(matrix.target, 'linux-musl')
         run: rustup target add ${{ matrix.target }}
+
+      - name: Set linker for musl targets
+        if: contains(matrix.target, 'linux-musl')
+        run: |
+          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-musl" ]; then
+            echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc" >> $GITHUB_ENV
+          elif [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> $GITHUB_ENV
+          fi
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
