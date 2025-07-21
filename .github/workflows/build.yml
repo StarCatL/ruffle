@@ -1,0 +1,43 @@
+name: Static Build for Linux aarch64
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [aarch64-unknown-linux-musl]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install musl-tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y musl-tools build-essential
+
+    - name: Install Rust target
+      run: rustup target add ${{ matrix.target }}
+
+    - name: Build Ruffle
+      run: |
+        cd desktop
+        cargo build --release --target ${{ matrix.target }}
+        mkdir -p release
+
+    - name: Package artifacts
+      run: |
+        cd desktop
+        cp target/${{ matrix.target }}/release/ruffle release/
+        tar czvf linux-aarch64.tar.gz release/
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: linux-aarch64-static
+        path: desktop/linux-aarch64.tar.gz
