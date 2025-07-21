@@ -109,14 +109,14 @@ jobs:
           - build_name: linux-x86_64
             os: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-            FEATURES: desktop,sandbox,jpegxr,audio-null
-            NO_DEFAULT_FEATURES: true
+            FEATURES: sandbox,jpegxr  # 移除了无效特性
+            NO_DEFAULT_FEATURES: false  # 改为 false
 
           - build_name: linux-aarch64
             os: ubuntu-24.04
             target: aarch64-unknown-linux-musl
-            FEATURES: desktop,sandbox,jpegxr,audio-null
-            NO_DEFAULT_FEATURES: true
+            FEATURES: sandbox,jpegxr  # 移除了无效特性
+            NO_DEFAULT_FEATURES: false  # 改为 false
 
           # Mac does two Rust builds to make a universal binary
           - build_name: macos-x86_64
