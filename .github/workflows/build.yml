@@ -219,7 +219,7 @@ jobs:
               -Dstatic-libudev=true \
               -Dshared-libudev=false \
               -Dmode=release \
-              -Dtests=disabled \
+              -Dtests=false \
               -Dlink-udev-shared=false \
               build
             
