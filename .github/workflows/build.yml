@@ -246,10 +246,8 @@ jobs:
             sudo mkdir -p $SYSROOT_DIR/usr/include/sys
             echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
             
-            # 完全重写有问题的 meson.build 部分
-            sed -i '/if not cc\.has_header.*capability\.h/,/endif/ {
-                /if not cc\.has_header.*capability\.h/c\
-            ' meson.build
+            # 修复sed命令语法错误 - 使用简化版本
+            sed -i '/if not cc\.has_header.*capability\.h/,/endif/ {/error/d}' meson.build
             
             # 修改源文件避免引用 capability.h
             find src -type f -exec sed -i "s/#include <sys\/capability.h>//g" {} +
