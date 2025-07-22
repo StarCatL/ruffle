@@ -217,10 +217,11 @@ jobs:
             meson setup \
               --cross-file cross.txt \
               -Dprefix=$SYSROOT_DIR/usr \
-              -Dlibudev=static \  # 替换废弃的选项
               -Dmode=release \
               -Dtests=false \
               -Dlink-udev-shared=false \
+              -Ddefault_library=static \  # 使用正确的选项
+              -Dudev=true \  # 确保启用udev
               build
             
             ninja -C build
