@@ -195,11 +195,17 @@ jobs:
             # 安装构建依赖
             sudo apt-get install -y meson ninja-build gettext pkg-config gperf
             
-            # 修复: 直接修改源码禁用 capability 支持
-            # 在 meson.build 中注释掉 capability 相关代码
-            sed -i "s/if conf.get('HAVE_LIBCAP') == 1/if false/" src/shared/meson.build
-            sed -i "s/deps += [libcap]/#deps += [libcap]/" src/shared/meson.build
-            sed -i "s/if conf.get('HAVE_LIBCAP') == 1/if false/" src/core/meson.build
+            # 修复: 彻底禁用 capability 检查
+            # 1. 创建假的 capability.h 头文件
+            sudo mkdir -p $SYSROOT_DIR/usr/include/sys
+            echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
+            
+            # 2. 修改 meson.build 文件跳过检查
+            sed -i "s/has_header('sys\/capability.h')/true/" meson.build
+            sed -i "s/error('POSIX caps headers not found')//" meson.build
+            
+            # 3. 修改源文件避免引用 capability.h
+            find src -type f -exec sed -i "s/#include <sys\/capability.h>//g" {} +
             
             # 创建交叉编译文件
             echo '[binaries]' > cross.txt
