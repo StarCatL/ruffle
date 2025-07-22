@@ -217,7 +217,6 @@ jobs:
               --cross-file cross.txt \
               -Dprefix=$SYSROOT_DIR/usr \
               -Dstatic-libudev=true \
-              -Dshared-libudev=false \
               -Dmode=release \
               -Dtests=false \
               -Dlink-udev-shared=false \
