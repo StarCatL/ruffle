@@ -200,7 +200,7 @@ jobs:
             echo "cpp = 'aarch64-linux-g++'" >> cross.txt
             echo "ar = 'aarch64-linux-ar'" >> cross.txt
             echo "strip = 'aarch64-linux-strip'" >> cross.txt
-            echo "pkgconfig = 'pkg-config'" >> cross.txt
+            echo "pkg-config = 'pkg-config'" >> cross.txt
             echo '' >> cross.txt
             echo '[host_machine]' >> cross.txt
             echo "system = 'linux'" >> cross.txt
@@ -210,7 +210,7 @@ jobs:
             echo '' >> cross.txt
             echo '[properties]' >> cross.txt
             echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
-            echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
+            echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkg-config'" >> cross.txt
             
             # 配置并编译libudev
             meson setup \
@@ -231,7 +231,7 @@ jobs:
             # 验证安装
             echo "验证交叉编译环境库文件:"
             ls -l $SYSROOT_DIR/usr/lib/libudev.*
-            ls -l $SYSROOT_DIR/usr/lib/pkgconfig/*.pc
+            ls -l $SYSROOT_DIR/usr/lib/pkg-config/*.pc
           fi
 
       - name: Install musl target
@@ -244,7 +244,7 @@ jobs:
           SYSROOT_DIR="/usr/local/aarch64--musl--stable-2023.11-1/aarch64-buildroot-linux-musl/sysroot"
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           echo "PKG_CONFIG_SYSROOT_DIR=$SYSROOT_DIR" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$SYSROOT_DIR/usr/lib/pkgconfig" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$SYSROOT_DIR/usr/lib/pkg-config" >> $GITHUB_ENV
           echo "ALSA_STATIC=1" >> $GITHUB_ENV
           echo "LIBUDEV_STATIC=1" >> $GITHUB_ENV
           echo "RUSTFLAGS=-L$SYSROOT_DIR/usr/lib" >> $GITHUB_ENV
