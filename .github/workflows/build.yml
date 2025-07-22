@@ -201,7 +201,7 @@ jobs:
             echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
             
             # 2. 完全重写有问题的 meson.build 部分
-            sed -i '/if not cc\.has_header.*capability\.h/,/endif/ {
+            sed -i '/if not cc\.has_header.*capability\.h/,/eof/ {
                 /if not cc\.has_header.*capability\.h/c\
 
                 /error/d
