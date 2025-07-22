@@ -222,7 +222,6 @@ jobs:
               -Dtests=false \
               -Dlink-udev-shared=false \
               -Ddefault_library=static \
-              -Dlibcap=disabled \  # 使用正确的选项名称
               build
             
             ninja -C build
