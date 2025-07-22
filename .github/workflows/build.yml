@@ -212,12 +212,12 @@ jobs:
             echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
             echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
             
+            # 修复: 使用新的libudev配置选项
             # 配置并编译libudev
             meson setup \
               --cross-file cross.txt \
               -Dprefix=$SYSROOT_DIR/usr \
-              -Dstatic-libudev=true \
-              -Dshared-libudev=false \
+              -Dlibudev=static \  # 替换废弃的选项
               -Dmode=release \
               -Dtests=false \
               -Dlink-udev-shared=false \
