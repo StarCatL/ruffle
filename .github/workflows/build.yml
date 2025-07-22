@@ -157,9 +157,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools musl-dev
           
-          # 修复：安装libcap-dev解决sys/capability.h缺失问题
-          sudo apt-get install -y libcap-dev
-          
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
             echo "安装 aarch64 musl 交叉编译工具链..."
             wget https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/aarch64--musl--stable-2023.11-1.tar.bz2
@@ -195,8 +192,9 @@ jobs:
             tar xf v$LIBUDEV_VERSION.tar.gz
             cd systemd-$LIBUDEV_VERSION
             
-            # 安装构建依赖（包含libcap-dev）
-            sudo apt-get install -y meson ninja-build gettext pkg-config gperf libcap-dev
+            # 修复: 添加 gperf 到构建依赖
+            # 安装构建依赖
+            sudo apt-get install -y meson ninja-build gettext pkg-config gperf
             
             # 创建交叉编译文件
             echo '[binaries]' > cross.txt
