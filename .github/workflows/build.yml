@@ -203,7 +203,7 @@ jobs:
             # 2. 完全重写有问题的 meson.build 部分
             sed -i '/if not cc\.has_header.*capability\.h/,/endif/ {
                 /if not cc\.has_header.*capability\.h/c\
-if true
+
                 /error/d
             }' meson.build
             
