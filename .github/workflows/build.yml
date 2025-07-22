@@ -243,19 +243,15 @@ jobs:
             sudo apt-get install -y meson ninja-build gettext pkg-config gperf
             
             # 修复: 彻底禁用 capability 检查
-            # 1. 创建假的 capability.h 头文件
             sudo mkdir -p $SYSROOT_DIR/usr/include/sys
             echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
             
-            # 2. 完全重写有问题的 meson.build 部分
+            # 完全重写有问题的 meson.build 部分
             sed -i '/if not cc\.has_header.*capability\.h/,/endif/ {
                 /if not cc\.has_header.*capability\.h/c\
-
-                /endif/d
-                /error/d
-            }' meson.build
+            ' meson.build
             
-            # 3. 修改源文件避免引用 capability.h
+            # 修改源文件避免引用 capability.h
             find src -type f -exec sed -i "s/#include <sys\/capability.h>//g" {} +
             
             # 创建交叉编译文件
@@ -276,6 +272,10 @@ jobs:
             echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
             echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
             
+            # 修复: 禁用mount依赖
+            sed -i "/dependency('mount')/d" meson.build
+            sed -i "s/dependency('mount')/dependency('', required: false)/g" meson_options.txt
+            
             # 配置并编译libudev
             meson setup \
               --cross-file cross.txt \
@@ -284,6 +284,7 @@ jobs:
               -Dtests=false \
               -Dlink-udev-shared=false \
               -Ddefault_library=static \
+              -Dmount=disabled \
               build
             
             ninja -C build
