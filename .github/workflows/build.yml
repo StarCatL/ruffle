@@ -194,25 +194,23 @@ jobs:
             # 安装构建依赖
             sudo apt-get install -y meson ninja-build gettext pkg-config
             
-            # 创建交叉编译配置文件
-            cat << EOF > cross.txt
-            [binaries]
-            c = 'aarch64-linux-gcc'
-            cpp = 'aarch64-linux-g++'
-            ar = 'aarch64-linux-ar'
-            strip = 'aarch64-linux-strip'
-            pkgconfig = 'pkg-config'
-            
-            [host_machine]
-            system = 'linux'
-            cpu_family = 'aarch64'
-            cpu = 'aarch64'
-            endian = 'little'
-            
-            [properties]
-            sys_root = '$SYSROOT_DIR'
-            pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'
-            EOF
+            # 修复 heredoc 问题 - 使用 echo 代替 heredoc
+            echo '[binaries]' > cross.txt
+            echo "c = 'aarch64-linux-gcc'" >> cross.txt
+            echo "cpp = 'aarch64-linux-g++'" >> cross.txt
+            echo "ar = 'aarch64-linux-ar'" >> cross.txt
+            echo "strip = 'aarch64-linux-strip'" >> cross.txt
+            echo "pkgconfig = 'pkg-config'" >> cross.txt
+            echo '' >> cross.txt
+            echo '[host_machine]' >> cross.txt
+            echo "system = 'linux'" >> cross.txt
+            echo "cpu_family = 'aarch64'" >> cross.txt
+            echo "cpu = 'aarch64'" >> cross.txt
+            echo "endian = 'little'" >> cross.txt
+            echo '' >> cross.txt
+            echo '[properties]' >> cross.txt
+            echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
+            echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
             
             # 配置并编译libudev
             meson setup \
@@ -493,7 +491,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download nightly release patch
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           name: nightly-release-patch
           path: /tmp
@@ -649,7 +647,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download nightly release patch
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           name: nightly-release-patch
           path: /tmp
