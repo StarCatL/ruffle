@@ -192,8 +192,9 @@ jobs:
             tar xf v$LIBUDEV_VERSION.tar.gz
             cd systemd-$LIBUDEV_VERSION
             
+            # 修复: 添加 gperf 到构建依赖
             # 安装构建依赖
-            sudo apt-get install -y meson ninja-build gettext pkg-config
+            sudo apt-get install -y meson ninja-build gettext pkg-config gperf
             
             # 创建交叉编译文件
             echo '[binaries]' > cross.txt
@@ -213,7 +214,6 @@ jobs:
             echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
             echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
             
-            # 修复: 移除无效的udev选项
             # 配置并编译libudev
             meson setup \
               --cross-file cross.txt \
