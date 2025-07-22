@@ -104,7 +104,7 @@ jobs:
           - build_name: linux-aarch64
             os: ubuntu-24.04
             target: aarch64-unknown-linux-musl
-            FEATURES: sandbox,jpegxr
+            FEATURES: jpegxr  # 移除了 sandbox 功能
             NO_DEFAULT_FEATURES: false
 
           - build_name: macos-x86_64
@@ -157,96 +157,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools musl-dev
           
+          # 仅安装基本工具链，不再尝试构建 libudev
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
             echo "安装 aarch64 musl 交叉编译工具链..."
             wget https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/aarch64--musl--stable-2023.11-1.tar.bz2
             sudo tar xf aarch64--musl--stable-2023.11-1.tar.bz2 -C /usr/local
             TOOLCHAIN_PATH="/usr/local/aarch64--musl--stable-2023.11-1/bin"
             echo "$TOOLCHAIN_PATH" >> $GITHUB_PATH
-            
-            echo "安装 ALSA 开发库到交叉编译环境..."
-            SYSROOT_DIR="/usr/local/aarch64--musl--stable-2023.11-1/aarch64-buildroot-linux-musl/sysroot"
-            ALSA_VERSION="1.2.10"
-            
-            sudo apt-get install -y autoconf automake libtool m4
-            
-            wget https://www.alsa-project.org/files/pub/lib/alsa-lib-$ALSA_VERSION.tar.bz2
-            tar xf alsa-lib-$ALSA_VERSION.tar.bz2
-            cd alsa-lib-$ALSA_VERSION
-            
-            ./configure \
-              --host=aarch64-buildroot-linux-musl \
-              --prefix=$SYSROOT_DIR/usr \
-              --enable-static \
-              --disable-shared \
-              --with-pic \
-              --disable-python
-            
-            make -j$(nproc)
-            sudo make install
-            cd ..
-            
-            echo "安装 libudev 到交叉编译环境..."
-            LIBUDEV_VERSION="253"
-            wget https://github.com/systemd/systemd/archive/refs/tags/v$LIBUDEV_VERSION.tar.gz
-            tar xf v$LIBUDEV_VERSION.tar.gz
-            cd systemd-$LIBUDEV_VERSION
-            
-            # 安装构建依赖
-            sudo apt-get install -y meson ninja-build gettext pkg-config gperf
-            
-            # 修复: 彻底禁用 capability 检查
-            # 1. 创建假的 capability.h 头文件
-            sudo mkdir -p $SYSROOT_DIR/usr/include/sys
-            echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
-            
-            # 2. 完全重写有问题的 meson.build 部分
-            sed -i '/if not cc\.has_header.*capability\.h/,/eof/ {
-                /if not cc\.has_header.*capability\.h/c\
-
-                /error/d
-            }' meson.build
-            
-            # 3. 修改源文件避免引用 capability.h
-            find src -type f -exec sed -i "s/#include <sys\/capability.h>//g" {} +
-            
-            # 创建交叉编译文件
-            echo '[binaries]' > cross.txt
-            echo "c = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-gcc'" >> cross.txt
-            echo "cpp = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-g++'" >> cross.txt
-            echo "ar = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ar'" >> cross.txt
-            echo "strip = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-strip'" >> cross.txt
-            echo "pkg-config = 'pkg-config'" >> cross.txt
-            echo '' >> cross.txt
-            echo '[host_machine]' >> cross.txt
-            echo "system = 'linux'" >> cross.txt
-            echo "cpu_family = 'aarch64'" >> cross.txt
-            echo "cpu = 'aarch64'" >> cross.txt
-            echo "endian = 'little'" >> cross.txt
-            echo '' >> cross.txt
-            echo '[properties]' >> cross.txt
-            echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
-            echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
-            
-            # 配置并编译libudev
-            meson setup \
-              --cross-file cross.txt \
-              -Dprefix=$SYSROOT_DIR/usr \
-              -Dmode=release \
-              -Dtests=false \
-              -Dlink-udev-shared=false \
-              -Ddefault_library=static \
-              build
-            
-            ninja -C build
-            sudo ninja -C build install
-            
-            cd ..
-            
-            # 验证安装
-            echo "验证交叉编译环境库文件:"
-            ls -l $SYSROOT_DIR/usr/lib/libudev.*
-            ls -l $SYSROOT_DIR/usr/lib/pkgconfig/*.pc
           fi
 
       - name: Install musl target
@@ -263,12 +180,7 @@ jobs:
           echo "AR=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ar" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           echo "PKG_CONFIG_SYSROOT_DIR=$SYSROOT_DIR" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$SYSROOT_DIR/usr/lib/pkgconfig" >> $GITHUB_ENV
-          echo "ALSA_STATIC=1" >> $GITHUB_ENV
-          echo "LIBUDEV_STATIC=1" >> $GITHUB_ENV
           echo "RUSTFLAGS=-L$SYSROOT_DIR/usr/lib" >> $GITHUB_ENV
-          echo "CFLAGS=-I$SYSROOT_DIR/usr/include" >> $GITHUB_ENV
-          echo "LDFLAGS=-L$SYSROOT_DIR/usr/lib" >> $GITHUB_ENV
 
       - name: Set linker for musl targets
         if: contains(matrix.target, 'linux-musl')
@@ -284,19 +196,6 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
-
-      - name: Install Linux dependencies (non-musl only)
-        if: runner.os == 'Linux' && !contains(matrix.target, 'musl')
-        run: |
-          sudo apt-get update
-          sudo apt install -y libasound2-dev libudev-dev
-
-      - name: Install WiX
-        if: runner.os == 'Windows'
-        run: |
-          dotnet tool install --global wix --version 5.0.2
-          wix extension add -g WixToolset.UI.wixext/5.0.2
-          wix extension add -g WixToolset.Util.wixext/5.0.2
 
       - name: Cargo build
         run: |
