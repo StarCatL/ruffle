@@ -186,16 +186,12 @@ jobs:
             sudo make install
             cd ..
             
-            # 修复: 安装 libcap-dev 解决 sys/capability.h 缺失问题
-            sudo apt-get install -y libcap-dev
-            
             echo "安装 libudev 到交叉编译环境..."
             LIBUDEV_VERSION="253"
             wget https://github.com/systemd/systemd/archive/refs/tags/v$LIBUDEV_VERSION.tar.gz
             tar xf v$LIBUDEV_VERSION.tar.gz
             cd systemd-$LIBUDEV_VERSION
             
-            # 修复: 添加 gperf 到构建依赖
             # 安装构建依赖
             sudo apt-get install -y meson ninja-build gettext pkg-config gperf
             
@@ -205,7 +201,7 @@ jobs:
             echo "cpp = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-g++'" >> cross.txt
             echo "ar = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ar'" >> cross.txt
             echo "strip = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-strip'" >> cross.txt
-            echo "pkgconfig = 'pkg-config'" >> cross.txt
+            echo "pkg-config = 'pkg-config'" >> cross.txt  # 修复pkgconfig警告
             echo '' >> cross.txt
             echo '[host_machine]' >> cross.txt
             echo "system = 'linux'" >> cross.txt
@@ -217,7 +213,7 @@ jobs:
             echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
             echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
             
-            # 配置并编译libudev
+            # 配置并编译libudev - 使用有效的meson选项
             meson setup \
               --cross-file cross.txt \
               -Dprefix=$SYSROOT_DIR/usr \
@@ -225,7 +221,7 @@ jobs:
               -Dtests=false \
               -Dlink-udev-shared=false \
               -Ddefault_library=static \
-              -Dlibcap=false \  # 禁用capability检查
+              -Dcapability=false \  # 禁用capability支持
               build
             
             ninja -C build
