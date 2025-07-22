@@ -186,6 +186,9 @@ jobs:
             sudo make install
             cd ..
             
+            # 修复: 安装 libcap-dev 解决 sys/capability.h 缺失问题
+            sudo apt-get install -y libcap-dev
+            
             echo "安装 libudev 到交叉编译环境..."
             LIBUDEV_VERSION="253"
             wget https://github.com/systemd/systemd/archive/refs/tags/v$LIBUDEV_VERSION.tar.gz
@@ -222,6 +225,7 @@ jobs:
               -Dtests=false \
               -Dlink-udev-shared=false \
               -Ddefault_library=static \
+              -Dlibcap=false \  # 禁用capability检查
               build
             
             ninja -C build
