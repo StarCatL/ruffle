@@ -161,7 +161,8 @@ jobs:
             echo "安装 aarch64 musl 交叉编译工具链..."
             wget https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/aarch64--musl--stable-2023.11-1.tar.bz2
             sudo tar xf aarch64--musl--stable-2023.11-1.tar.bz2 -C /usr/local
-            echo "/usr/local/aarch64--musl--stable-2023.11-1/bin" >> $GITHUB_PATH
+            TOOLCHAIN_PATH="/usr/local/aarch64--musl--stable-2023.11-1/bin"
+            echo "$TOOLCHAIN_PATH" >> $GITHUB_PATH
             
             echo "安装 ALSA 开发库到交叉编译环境..."
             SYSROOT_DIR="/usr/local/aarch64--musl--stable-2023.11-1/aarch64-buildroot-linux-musl/sysroot"
@@ -174,7 +175,7 @@ jobs:
             cd alsa-lib-$ALSA_VERSION
             
             ./configure \
-              --host=aarch64-linux \
+              --host=aarch64-buildroot-linux-musl \
               --prefix=$SYSROOT_DIR/usr \
               --enable-static \
               --disable-shared \
@@ -194,12 +195,12 @@ jobs:
             # 安装构建依赖
             sudo apt-get install -y meson ninja-build gettext pkg-config
             
-            # 修复 heredoc 问题 - 使用 echo 代替 heredoc
+            # 创建交叉编译文件
             echo '[binaries]' > cross.txt
-            echo "c = 'aarch64-linux-gcc'" >> cross.txt
-            echo "cpp = 'aarch64-linux-g++'" >> cross.txt
-            echo "ar = 'aarch64-linux-ar'" >> cross.txt
-            echo "strip = 'aarch64-linux-strip'" >> cross.txt
+            echo "c = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-gcc'" >> cross.txt
+            echo "cpp = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-g++'" >> cross.txt
+            echo "ar = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ar'" >> cross.txt
+            echo "strip = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-strip'" >> cross.txt
             echo "pkgconfig = 'pkg-config'" >> cross.txt
             echo '' >> cross.txt
             echo '[host_machine]' >> cross.txt
@@ -212,7 +213,6 @@ jobs:
             echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
             echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
             
-            # 修复: 使用新的libudev配置选项
             # 配置并编译libudev
             meson setup \
               --cross-file cross.txt \
@@ -220,8 +220,8 @@ jobs:
               -Dmode=release \
               -Dtests=false \
               -Dlink-udev-shared=false \
-              -Ddefault_library=static \  # 使用正确的选项
-              -Dudev=true \  # 确保启用udev
+              -Ddefault_library=static \
+              -Dudev=true \
               build
             
             ninja -C build
@@ -243,6 +243,10 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-musl'
         run: |
           SYSROOT_DIR="/usr/local/aarch64--musl--stable-2023.11-1/aarch64-buildroot-linux-musl/sysroot"
+          TOOLCHAIN_PATH="/usr/local/aarch64--musl--stable-2023.11-1/bin"
+          echo "CC=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-gcc" >> $GITHUB_ENV
+          echo "CXX=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-g++" >> $GITHUB_ENV
+          echo "AR=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ar" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           echo "PKG_CONFIG_SYSROOT_DIR=$SYSROOT_DIR" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$SYSROOT_DIR/usr/lib/pkgconfig" >> $GITHUB_ENV
@@ -258,7 +262,7 @@ jobs:
           if [ "${{ matrix.target }}" = "x86_64-unknown-linux-musl" ]; then
             echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc" >> $GITHUB_ENV
           elif [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
-            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gcc" >> $GITHUB_ENV
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/aarch64--musl--stable-2023.11-1/bin/aarch64-buildroot-linux-musl-gcc" >> $GITHUB_ENV
           fi
 
       - name: Install Rust toolchain
