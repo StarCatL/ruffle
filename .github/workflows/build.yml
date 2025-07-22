@@ -270,9 +270,18 @@ jobs:
             echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
             echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
             
-            # 修复: 禁用mount依赖
-            sed -i "/dependency('mount')/d" meson.build
-            sed -i "s/dependency('mount')/dependency('', required: false)/g" meson_options.txt
+            # 彻底禁用mount依赖
+            # 1. 删除所有对mount的依赖检查
+            sed -i "/mount/d" meson.build
+            sed -i "/mount/d" src/shared/meson.build
+            sed -i "/mount/d" src/core/meson.build
+            
+            # 2. 在配置中显式禁用mount
+            sed -i "s/option('mount',/option('mount', default: 'disabled',/" meson_options.txt
+            
+            # 3. 创建一个空的mount库作为占位符
+            echo "empty" > src/shared/mount-util.c
+            echo "empty" > src/shared/mount-util.h
             
             # 配置并编译libudev
             meson setup \
@@ -282,7 +291,12 @@ jobs:
               -Dtests=false \
               -Dlink-udev-shared=false \
               -Ddefault_library=static \
+              -Dmount=disabled \
               build
+            
+            # 修复构建错误
+            sed -i "s/#include <sys\/mount.h>//g" build/src/shared/mount-util.*
+            sed -i "s/#include <linux\/fs.h>//g" build/src/shared/mount-util.*
             
             ninja -C build
             sudo ninja -C build install
