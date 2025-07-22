@@ -195,6 +195,12 @@ jobs:
             # 安装构建依赖
             sudo apt-get install -y meson ninja-build gettext pkg-config gperf
             
+            # 修复: 直接修改源码禁用 capability 支持
+            # 在 meson.build 中注释掉 capability 相关代码
+            sed -i "s/if conf.get('HAVE_LIBCAP') == 1/if false/" src/shared/meson.build
+            sed -i "s/deps += [libcap]/#deps += [libcap]/" src/shared/meson.build
+            sed -i "s/if conf.get('HAVE_LIBCAP') == 1/if false/" src/core/meson.build
+            
             # 创建交叉编译文件
             echo '[binaries]' > cross.txt
             echo "c = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-gcc'" >> cross.txt
@@ -213,8 +219,7 @@ jobs:
             echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
             echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
             
-            # 配置并编译libudev - 使用正确的选项
-            # 修复: 使用正确的选项禁用capability支持
+            # 配置并编译libudev
             meson setup \
               --cross-file cross.txt \
               -Dprefix=$SYSROOT_DIR/usr \
