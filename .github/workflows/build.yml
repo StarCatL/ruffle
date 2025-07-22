@@ -200,12 +200,8 @@ jobs:
             sudo mkdir -p $SYSROOT_DIR/usr/include/sys
             echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
             
-            # 2. 完全重写有问题的 meson.build 部分
-            sed -i '/if not cc\.has_header.*capability\.h/,/endif/ {
-                /if not cc\.has_header.*capability\.h/c\
-
-                /error/d
-            }' meson.build
+            # 2. 完全删除检查 capability.h 的条件块
+            sed -i '/if not cc\.has_header.*capability\.h/,/endif/d' meson.build
             
             # 3. 修改源文件避免引用 capability.h
             find src -type f -exec sed -i "s/#include <sys\/capability.h>//g" {} +
