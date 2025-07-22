@@ -186,6 +186,51 @@ jobs:
             sudo make install
             cd ..
             
+            echo "安装 libcap 到交叉编译环境..."
+            LIBCAP_VERSION="2.69"
+            wget https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-$LIBCAP_VERSION.tar.xz
+            tar xf libcap-$LIBCAP_VERSION.tar.xz
+            cd libcap-$LIBCAP_VERSION
+            
+            # 设置编译标志
+            export CC=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-gcc
+            export AR=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ar
+            export RANLIB=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ranlib
+            export CFLAGS="--sysroot=$SYSROOT_DIR -I$SYSROOT_DIR/usr/include"
+            export LDFLAGS="--sysroot=$SYSROOT_DIR -L$SYSROOT_DIR/usr/lib"
+            
+            # 禁用共享库，只构建静态库
+            make -C libcap \
+                BUILD_CC=gcc \
+                CC=$CC \
+                AR=$AR \
+                RANLIB=$RANLIB \
+                CFLAGS="$CFLAGS" \
+                LDFLAGS="$LDFLAGS" \
+                libcap.a
+            
+            # 安装到sysroot
+            sudo mkdir -p $SYSROOT_DIR/usr/include/sys
+            sudo cp libcap/include/*.h $SYSROOT_DIR/usr/include/
+            sudo cp libcap/libcap.a $SYSROOT_DIR/usr/lib/
+            
+            # 创建pkg-config文件
+            echo "prefix=$SYSROOT_DIR/usr" > libcap.pc
+            echo "exec_prefix=\${prefix}" >> libcap.pc
+            echo "libdir=\${exec_prefix}/lib" >> libcap.pc
+            echo "includedir=\${prefix}/include" >> libcap.pc
+            echo "" >> libcap.pc
+            echo "Name: libcap" >> libcap.pc
+            echo "Description: Linux capabilities library" >> libcap.pc
+            echo "Version: $LIBCAP_VERSION" >> libcap.pc
+            echo "Cflags: -I\${includedir}" >> libcap.pc
+            echo "Libs: -L\${libdir} -lcap" >> libcap.pc
+            
+            sudo mkdir -p $SYSROOT_DIR/usr/lib/pkgconfig
+            sudo cp libcap.pc $SYSROOT_DIR/usr/lib/pkgconfig/
+            
+            cd ..
+            
             echo "安装 libudev 到交叉编译环境..."
             LIBUDEV_VERSION="253"
             wget https://github.com/systemd/systemd/archive/refs/tags/v$LIBUDEV_VERSION.tar.gz
@@ -200,8 +245,13 @@ jobs:
             sudo mkdir -p $SYSROOT_DIR/usr/include/sys
             echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
             
-            # 2. 完全删除检查 capability.h 的条件块
-            sed -i '/if not cc\.has_header.*capability\.h/,/endif/d' meson.build
+            # 2. 完全重写有问题的 meson.build 部分
+            sed -i '/if not cc\.has_header.*capability\.h/,/endif/ {
+                /if not cc\.has_header.*capability\.h/c\
+if true
+                /endif/d
+                /error/d
+            }' meson.build
             
             # 3. 修改源文件避免引用 capability.h
             find src -type f -exec sed -i "s/#include <sys\/capability.h>//g" {} +
@@ -241,6 +291,7 @@ jobs:
             
             # 验证安装
             echo "验证交叉编译环境库文件:"
+            ls -l $SYSROOT_DIR/usr/lib/libcap.*
             ls -l $SYSROOT_DIR/usr/lib/libudev.*
             ls -l $SYSROOT_DIR/usr/lib/pkgconfig/*.pc
           fi
