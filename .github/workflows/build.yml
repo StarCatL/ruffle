@@ -202,7 +202,7 @@ jobs:
             
             # 2. 修改 meson.build 文件跳过检查
             sed -i "s/has_header('sys\/capability.h')/true/" meson.build
-            sed -i "s/error('POSIX caps headers not found')//" meson.build
+            sed -i "/error('POSIX caps headers not found')/d" meson.build
             
             # 3. 修改源文件避免引用 capability.h
             find src -type f -exec sed -i "s/#include <sys\/capability.h>//g" {} +
