@@ -209,9 +209,11 @@ jobs:
                 LDFLAGS="$LDFLAGS" \
                 libcap.a
             
-            # 安装到sysroot
+            # 修复头文件复制路径
+            sudo mkdir -p $SYSROOT_DIR/usr/include/linux
+            sudo cp libcap/include/uapi/linux/capability.h $SYSROOT_DIR/usr/include/linux/
             sudo mkdir -p $SYSROOT_DIR/usr/include/sys
-            sudo cp libcap/include/*.h $SYSROOT_DIR/usr/include/
+            sudo cp libcap/cap_names.h $SYSROOT_DIR/usr/include/sys/capability.h
             sudo cp libcap/libcap.a $SYSROOT_DIR/usr/lib/
             
             # 创建pkg-config文件
