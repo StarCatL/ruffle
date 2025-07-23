@@ -130,7 +130,7 @@ jobs:
             os: windows-latest
             target: x86_64-pc-windows-msvc
             RUSTFLAGS: -Ctarget-feature=+crt-static
-            DESKTOP_FEATURES: jpegxr
+            DESKTOP_FEatURES: jpegxr
             MSI_ARCH: x64
 
     env:
@@ -246,35 +246,19 @@ jobs:
             sudo mkdir -p $SYSROOT_DIR/usr/include/sys
             echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
             
-            # 精确修复 Meson 语法错误
-            echo "精确修复 Meson 语法错误..."
-            awk '
-            # 匹配特定的 foreach 循环
-            /^foreach decl : .*$/ {
-                in_foreach = 1
-                print
-                next
-            }
-            
-            # 在特定的 foreach 循环中匹配特定的 endif
-            in_foreach && /^ *if have$/ {
-                in_if_block = 1
-                print
-                next
-            }
-            
-            # 在 if 块中匹配 endif
-            in_if_block && /^ *endif *$/ {
-                print "        endforeach"
-                in_foreach = 0
-                in_if_block = 0
-                next
-            }
-            
-            # 默认打印所有行
-            { print }
-            ' meson.build > meson.build.fixed
-            mv meson.build.fixed meson.build
+            # 直接应用补丁修复 Meson 语法错误
+            echo "直接应用补丁修复 Meson 语法错误..."
+            cat > meson_fix.patch << 'EOPATCH'
+--- meson.build.orig
++++ meson.build
+@@ -546,7 +546,7 @@
+                 if have
+                         decl_conf.set('10', 1)
+                 endif
+-        endif
++        endforeach
+ EOPATCH
+            patch -p1 < meson_fix.patch
             
             # 彻底禁用mount依赖
             # 1. 删除所有对mount的依赖检查
