@@ -246,19 +246,32 @@ jobs:
             sudo mkdir -p $SYSROOT_DIR/usr/include/sys
             echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
             
-            # 修复 Meson 语法错误 - 精确修复方案
-            echo "修复 Meson 语法错误..."
+            # 精确修复 Meson 语法错误
+            echo "精确修复 Meson 语法错误..."
             awk '
+            # 匹配特定的 foreach 循环
             /^foreach decl : .*$/ {
                 in_foreach = 1
                 print
                 next
             }
-            in_foreach && /^ *endif$/ {
-                print "        endforeach"
-                in_foreach = 0
+            
+            # 在特定的 foreach 循环中匹配特定的 endif
+            in_foreach && /^ *if have$/ {
+                in_if_block = 1
+                print
                 next
             }
+            
+            # 在 if 块中匹配 endif
+            in_if_block && /^ *endif *$/ {
+                print "        endforeach"
+                in_foreach = 0
+                in_if_block = 0
+                next
+            }
+            
+            # 默认打印所有行
             { print }
             ' meson.build > meson.build.fixed
             mv meson.build.fixed meson.build
