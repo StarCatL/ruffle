@@ -130,7 +130,7 @@ jobs:
             os: windows-latest
             target: x86_64-pc-windows-msvc
             RUSTFLAGS: -Ctarget-feature=+crt-static
-            DESKTOP_FEATURES: jpegxr
+            DESKTOP_FEatURES: jpegxr
             MSI_ARCH: x64
 
     env:
@@ -257,7 +257,7 @@ jobs:
                  endif
 -        endif
 +        endforeach
-EOPATCH
+ EOPATCH
             patch -p1 < meson_fix.patch
             
             # 彻底禁用mount依赖
