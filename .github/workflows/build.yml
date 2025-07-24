@@ -226,22 +226,42 @@ jobs:
           # 修复头文件包含顺序
           sed -i "s|#include <errno.h>|#include <errno.h>\n#include <linux/capability.h>|" libcap/include/uapi/linux/capability.h
           
-          # 修复构建命令
-          make -C libcap \
-            BUILD_CC=gcc \
-            CC="$CC" \
-            AR="$AR" \
-            RANLIB="$RANLIB" \
-            CFLAGS="$CFLAGS" \
-            LDFLAGS="$LDFLAGS" \
-            libcap.a
-            
+          # 手动构建 libcap
+          cd libcap
+          
+          # 编译所有源文件
+          $CC $CFLAGS -c cap_alloc.c -o cap_alloc.o
+          $CC $CFLAGS -c cap_proc.c -o cap_proc.o
+          $CC $CFLAGS -c cap_extint.c -o cap_extint.o
+          $CC $CFLAGS -c cap_flag.c -o cap_flag.o
+          $CC $CFLAGS -c cap_text.c -o cap_text.o
+          $CC $CFLAGS -c cap_file.c -o cap_file.o
+          
+          # 创建静态库
+          $AR rcs libcap.a cap_alloc.o cap_proc.o cap_extint.o cap_flag.o cap_text.o cap_file.o
+          $RANLIB libcap.a
+          
+          cd ..
+          
           # 安装到 sysroot
-          sudo make install \
-            prefix="$SYSROOT_DIR/usr" \
-            lib=lib \
-            INCDIR="$SYSROOT_DIR/usr/include" \
-            RAISE_SETFCAP=no
+          sudo cp libcap/libcap.a $SYSROOT_DIR/usr/lib/
+          sudo cp libcap/include/capability.h $SYSROOT_DIR/usr/include/sys/capability.h
+          sudo cp libcap/include/uapi/linux/capability.h $SYSROOT_DIR/usr/include/linux/
+          
+          # 创建 pkg-config 文件
+          echo "prefix=$SYSROOT_DIR/usr" > libcap.pc
+          echo "exec_prefix=\${prefix}" >> libcap.pc
+          echo "libdir=\${exec_prefix}/lib" >> libcap.pc
+          echo "includedir=\${prefix}/include" >> libcap.pc
+          echo "" >> libcap.pc
+          echo "Name: libcap" >> libcap.pc
+          echo "Description: Linux capabilities library" >> libcap.pc
+          echo "Version: $LIBCAP_VERSION" >> libcap.pc
+          echo "Cflags: -I\${includedir}" >> libcap.pc
+          echo "Libs: -L\${libdir} -lcap" >> libcap.pc
+          
+          sudo mkdir -p $SYSROOT_DIR/usr/lib/pkgconfig
+          sudo cp libcap.pc $SYSROOT_DIR/usr/lib/pkgconfig/
           
           cd ..
           
