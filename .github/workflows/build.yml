@@ -246,9 +246,12 @@ jobs:
             sudo mkdir -p $SYSROOT_DIR/usr/include/sys
             echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
             
-            # ==== 修复部分：直接修改文件修复 Meson 语法错误 ====
-            echo "直接修改文件修复 Meson 语法错误..."
+            # ==== 修复所有 Meson 语法错误 ====
+            echo "直接修改文件修复所有 Meson 语法错误..."
+            # 修复第一个错误位置
             sed -i '546s/endif/endforeach/' meson.build
+            # 修复第二个错误位置（新出现的错误）
+            sed -i '550s/endif/endforeach/' meson.build
             
             # 彻底禁用mount依赖
             # 1. 删除所有对mount的依赖检查
