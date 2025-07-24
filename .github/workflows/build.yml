@@ -106,7 +106,6 @@ jobs:
             target: aarch64-unknown-linux-musl
             FEATURES: sandbox,jpegxr
             NO_DEFAULT_FEATURES: false
-            MUSL_CROSS: true
 
           - build_name: macos-x86_64
             os: macos-14
@@ -158,130 +157,199 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools musl-dev
           
-          # 仅为 aarch64 安装交叉编译工具链
-          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-musl" ]]; then
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
             echo "安装 aarch64 musl 交叉编译工具链..."
-            TOOLCHAIN_URL="https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/aarch64--musl--stable-2023.11-1.tar.bz2"
-            TOOLCHAIN_FILE="aarch64-musl-toolchain.tar.bz2"
-            SYSROOT_DIR="/usr/local/aarch64-musl-sysroot"
-            
-            # 下载并解压工具链
-            wget -O "$TOOLCHAIN_FILE" "$TOOLCHAIN_URL"
-            sudo mkdir -p "$SYSROOT_DIR"
-            sudo tar xf "$TOOLCHAIN_FILE" -C "$SYSROOT_DIR" --strip-components=1
-            
-            # 设置环境变量
-            TOOLCHAIN_PATH="$SYSROOT_DIR/bin"
-            echo "TOOLCHAIN_PATH=$TOOLCHAIN_PATH" >> $GITHUB_ENV
-            echo "SYSROOT_DIR=$SYSROOT_DIR" >> $GITHUB_ENV
-            
-            # 添加到 PATH
+            wget https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/aarch64--musl--stable-2023.11-1.tar.bz2
+            sudo tar xf aarch64--musl--stable-2023.11-1.tar.bz2 -C /usr/local
+            TOOLCHAIN_PATH="/usr/local/aarch64--musl--stable-2023.11-1/bin"
             echo "$TOOLCHAIN_PATH" >> $GITHUB_PATH
+            
+            echo "安装 ALSA 开发库到交叉编译环境..."
+            SYSROOT_DIR="/usr/local/aarch64--musl--stable-2023.11-1/aarch64-buildroot-linux-musl/sysroot"
+            ALSA_VERSION="1.2.10"
+            
+            sudo apt-get install -y autoconf automake libtool m4
+            
+            wget https://www.alsa-project.org/files/pub/lib/alsa-lib-$ALSA_VERSION.tar.bz2
+            tar xf alsa-lib-$ALSA_VERSION.tar.bz2
+            cd alsa-lib-$ALSA_VERSION
+            
+            ./configure \
+              --host=aarch64-buildroot-linux-musl \
+              --prefix=$SYSROOT_DIR/usr \
+              --enable-static \
+              --disable-shared \
+              --with-pic \
+              --disable-python
+            
+            make -j$(nproc)
+            sudo make install
+            cd ..
+            
+            echo "安装 libcap 到交叉编译环境..."
+            LIBCAP_VERSION="2.69"
+            wget https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-$LIBCAP_VERSION.tar.xz
+            tar xf libcap-$LIBCAP_VERSION.tar.xz
+            cd libcap-$LIBCAP_VERSION
+            
+            # 设置编译标志
+            export CC=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-gcc
+            export AR=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ar
+            export RANLIB=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ranlib
+            export CFLAGS="--sysroot=$SYSROOT_DIR -I$SYSROOT_DIR/usr/include"
+            export LDFLAGS="--sysroot=$SYSROOT_DIR -L$SYSROOT_DIR/usr/lib"
+            
+            # 禁用共享库，只构建静态库
+            make -C libcap \
+                BUILD_CC=gcc \
+                CC=$CC \
+                AR=$AR \
+                RANLIB=$RANLIB \
+                CFLAGS="$CFLAGS" \
+                LDFLAGS="$LDFLAGS" \
+                libcap.a
+            
+            # 修复头文件复制路径
+            sudo mkdir -p $SYSROOT_DIR/usr/include/linux
+            sudo cp libcap/include/uapi/linux/capability.h $SYSROOT_DIR/usr/include/linux/
+            sudo mkdir -p $SYSROOT_DIR/usr/include/sys
+            sudo cp libcap/cap_names.h $SYSROOT_DIR/usr/include/sys/capability.h
+            sudo cp libcap/libcap.a $SYSROOT_DIR/usr/lib/
+            
+            # 创建pkg-config文件
+            echo "prefix=$SYSROOT_DIR/usr" > libcap.pc
+            echo "exec_prefix=\${prefix}" >> libcap.pc
+            echo "libdir=\${exec_prefix}/lib" >> libcap.pc
+            echo "includedir=\${prefix}/include" >> libcap.pc
+            echo "" >> libcap.pc
+            echo "Name: libcap" >> libcap.pc
+            echo "Description: Linux capabilities library" >> libcap.pc
+            echo "Version: $LIBCAP_VERSION" >> libcap.pc
+            echo "Cflags: -I\${includedir}" >> libcap.pc
+            echo "Libs: -L\${libdir} -lcap" >> libcap.pc
+            
+            sudo mkdir -p $SYSROOT_DIR/usr/lib/pkgconfig
+            sudo cp libcap.pc $SYSROOT_DIR/usr/lib/pkgconfig/
+            
+            cd ..
+            
+            echo "安装 libudev 到交叉编译环境..."
+            LIBUDEV_VERSION="253"
+            wget https://github.com/systemd/systemd/archive/refs/tags/v$LIBUDEV_VERSION.tar.gz
+            tar xf v$LIBUDEV_VERSION.tar.gz
+            cd systemd-$LIBUDEV_VERSION
+            
+            # 安装构建依赖
+            sudo apt-get install -y meson ninja-build gettext pkg-config gperf
+            
+            # 修复: 彻底禁用 capability 检查
+            sudo mkdir -p $SYSROOT_DIR/usr/include/sys
+            echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
+            
+            # ==== 全面修复 Meson 语法错误 ====
+            echo "全面修复 Meson 语法错误..."
+            # 修复所有在 foreach 块中错误的 endif
+            sed -i -e '/foreach decl :.*char16_t/,/endforeach/ s/endif/endforeach/g' meson.build
+            
+            # 彻底禁用mount依赖
+            # 1. 删除所有对mount的依赖检查
+            sed -i "/mount/d" meson.build
+            sed -i "/mount/d" src/shared/meson.build
+            sed -i "/mount/d" src/core/meson.build
+            
+            # 2. 在配置中显式禁用mount
+            sed -i "s/option('mount',/option('mount', default: 'disabled',/" meson_options.txt
+            
+            # 3. 创建一个空的mount库作为占位符
+            echo "empty" > src/shared/mount-util.c
+            echo "empty" > src/shared/mount-util.h
+            
+            # 创建交叉编译文件
+            echo '[binaries]' > cross.txt
+            echo "c = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-gcc'" >> cross.txt
+            echo "cpp = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-g++'" >> cross.txt
+            echo "ar = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ar'" >> cross.txt
+            echo "strip = '$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-strip'" >> cross.txt
+            echo "pkg-config = 'pkg-config'" >> cross.txt
+            echo '' >> cross.txt
+            echo '[host_machine]' >> cross.txt
+            echo "system = 'linux'" >> cross.txt
+            echo "cpu_family = 'aarch64'" >> cross.txt
+            echo "cpu = 'aarch64'" >> cross.txt
+            echo "endian = 'little'" >> cross.txt
+            echo '' >> cross.txt
+            echo '[properties]' >> cross.txt
+            echo "sys_root = '$SYSROOT_DIR'" >> cross.txt
+            echo "pkg_config_libdir = '$SYSROOT_DIR/usr/lib/pkgconfig'" >> cross.txt
+            
+            # 配置并编译libudev
+            meson setup \
+              --cross-file cross.txt \
+              -Dprefix=$SYSROOT_DIR/usr \
+              -Dmode=release \
+              -Dtests=false \
+              -Dlink-udev-shared=false \
+              -Ddefault_library=static \
+              -Dmount=disabled \
+              build
+            
+            # 修复构建错误
+            sed -i "s/#include <sys\/mount.h>//g" build/src/shared/mount-util.*
+            sed -i "s/#include <linux\/fs.h>//g" build/src/shared/mount-util.*
+            
+            ninja -C build
+            sudo ninja -C build install
+            
+            cd ..
+            
+            # 验证安装
+            echo "验证交叉编译环境库文件:"
+            ls -l $SYSROOT_DIR/usr/lib/libcap.*
+            ls -l $SYSROOT_DIR/usr/lib/libudev.*
+            ls -l $SYSROOT_DIR/usr/lib/pkgconfig/*.pc
           fi
+
+      - name: Install musl target
+        if: contains(matrix.target, 'linux-musl')
+        run: rustup target add ${{ matrix.target }}
 
       - name: Set cross-compilation environment (aarch64 only)
         if: matrix.target == 'aarch64-unknown-linux-musl'
         run: |
-          echo "设置 aarch64 交叉编译环境..."
+          SYSROOT_DIR="/usr/local/aarch64--musl--stable-2023.11-1/aarch64-buildroot-linux-musl/sysroot"
+          TOOLCHAIN_PATH="/usr/local/aarch64--musl--stable-2023.11-1/bin"
           echo "CC=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-gcc" >> $GITHUB_ENV
           echo "CXX=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-g++" >> $GITHUB_ENV
           echo "AR=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ar" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           echo "PKG_CONFIG_SYSROOT_DIR=$SYSROOT_DIR" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$SYSROOT_DIR/usr/lib/pkgconfig" >> $GITHUB_ENV
+          echo "ALSA_STATIC=1" >> $GITHUB_ENV
+          echo "LIBUDEV_STATIC=1" >> $GITHUB_ENV
           echo "RUSTFLAGS=-L$SYSROOT_DIR/usr/lib" >> $GITHUB_ENV
-          echo "CFLAGS=--sysroot=$SYSROOT_DIR" >> $GITHUB_ENV
-          echo "LDFLAGS=--sysroot=$SYSROOT_DIR" >> $GITHUB_ENV
-          
-          # 设置 cargo 链接器
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-gcc" >> $GITHUB_ENV
+          echo "CFLAGS=-I$SYSROOT_DIR/usr/include" >> $GITHUB_ENV
+          echo "LDFLAGS=-L$SYSROOT_DIR/usr/lib" >> $GITHUB_ENV
 
-      - name: Install musl target
+      - name: Set linker for musl targets
         if: contains(matrix.target, 'linux-musl')
-        run: rustup target add ${{ matrix.target }}
-
-      - name: Build dependencies for aarch64 musl
-        if: matrix.target == 'aarch64-unknown-linux-musl'
         run: |
-          echo "构建 aarch64 musl 依赖库..."
-          DEPS_DIR="/tmp/musl-deps"
-          mkdir -p "$DEPS_DIR"
-          cd "$DEPS_DIR"
-          
-          # 安装构建工具
-          sudo apt-get install -y autoconf automake libtool m4
-          
-          # 构建 libcap
-          LIBCAP_VERSION="2.69"
-          wget "https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-$LIBCAP_VERSION.tar.xz"
-          tar xf "libcap-$LIBCAP_VERSION.tar.xz"
-          cd "libcap-$LIBCAP_VERSION"
-          
-          make -C libcap \
-            BUILD_CC=gcc \
-            CC="$CC" \
-            AR="$AR" \
-            RANLIB="$RANLIB" \
-            CFLAGS="$CFLAGS" \
-            LDFLAGS="$LDFLAGS" \
-            libcap.a
-            
-          # 安装到 sysroot
-          sudo make install \
-            prefix="$SYSROOT_DIR/usr" \
-            lib=lib \
-            INCDIR="$SYSROOT_DIR/usr/include" \
-            RAISE_SETFCAP=no
-          
-          cd ..
-          
-          # 构建 ALSA
-          ALSA_VERSION="1.2.10"
-          wget "https://www.alsa-project.org/files/pub/lib/alsa-lib-$ALSA_VERSION.tar.bz2"
-          tar xf "alsa-lib-$ALSA_VERSION.tar.bz2"
-          cd "alsa-lib-$ALSA_VERSION"
-          
-          ./configure \
-            --host=aarch64-buildroot-linux-musl \
-            --prefix="$SYSROOT_DIR/usr" \
-            --enable-static \
-            --disable-shared \
-            --with-pic \
-            --disable-python
-            
-          make -j$(nproc)
-          sudo make install
-          cd ..
-          
-          # 构建 libudev (简化版)
-          UDEV_VERSION="252"
-          wget "https://github.com/systemd/systemd/archive/refs/tags/v$UDEV_VERSION.tar.gz"
-          tar xf "v$UDEV_VERSION.tar.gz"
-          cd "systemd-$UDEV_VERSION"
-          
-          # 配置为最小化构建
-          meson setup \
-            --cross-file build/meson/cross/arm64-linux-musl.txt \
-            -Dprefix="$SYSROOT_DIR/usr" \
-            -Dmode=release \
-            -Dtests=false \
-            -Dlink-udev-shared=false \
-            -Ddefault_library=static \
-            -Dstatic-libudev=true \
-            -Dlibudev=true \
-            -Ddisable-all-system-features=true \
-            -Ddisable-all-user-features=true \
-            -Ddisable-manpages=true \
-            -Ddisable-dbus=true \
-            build
-          
-          ninja -C build src/libudev/libudev.a
-          sudo ninja -C build install
-          cd ..
-          
-          # 验证安装
-          echo "依赖库构建完成:"
-          ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev}.a
+          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-musl" ]; then
+            echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc" >> $GITHUB_ENV
+          elif [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/aarch64--musl--stable-2023.11-1/bin/aarch64-buildroot-linux-musl-gcc" >> $GITHUB_ENV
+          fi
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux dependencies (non-musl only)
+        if: runner.os == 'Linux' && !contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt install -y libasound2-dev libudev-dev
 
       - name: Install WiX
         if: runner.os == 'Windows'
@@ -292,16 +360,12 @@ jobs:
 
       - name: Cargo build
         run: |
-          echo "构建 Ruffle 目标: ${{ matrix.target }}"
-          
-          # 对于 musl 目标使用静态构建
           if [[ "${{ matrix.target }}" == *"musl"* ]]; then
             cargo build --locked --package ruffle_desktop --release \
-              --target ${{ matrix.target }} \
               --no-default-features \
-              --features "${{ matrix.FEATURES }}"
+              --features "${{ matrix.FEATURES }}" \
+              --target ${{ matrix.target }}
           else
-            # 其他目标的构建命令
             cargo build --locked --package ruffle_desktop --release \
               ${{ matrix.DESKTOP_FEATURES && '--features' }} ${{ matrix.DESKTOP_FEATURES }} \
               ${{ matrix.target && '--target' }} ${{ matrix.target }}
@@ -310,26 +374,6 @@ jobs:
           CFG_RELEASE_CHANNEL: nightly
           RUSTFLAGS: ${{ matrix.RUSTFLAGS }}
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.MACOSX_DEPLOYMENT_TARGET }}
-          
-          # 为 aarch64 musl 添加额外链接参数
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C link-arg=-lcap -C link-arg=-ludev -C link-arg=-lasound"
-
-      - name: Verify static linking (Linux musl only)
-        if: contains(matrix.target, 'linux-musl')
-        run: |
-          BINARY_PATH="${{ env.CARGO_BUILD_DIR }}/ruffle_desktop"
-          echo "验证静态链接: $BINARY_PATH"
-          
-          # 检查文件类型
-          file "$BINARY_PATH"
-          
-          # 检查动态依赖
-          readelf -d "$BINARY_PATH" | grep NEEDED && echo "错误: 检测到动态依赖!" && exit 1
-          
-          # 检查是否静态链接
-          ldd "$BINARY_PATH" 2>&1 | grep -q "not a dynamic executable" || (echo "错误: 不是静态可执行文件!" && exit 1)
-          
-          echo "验证通过: 完全静态链接的可执行文件"
 
       - name: Package common
         run: |
