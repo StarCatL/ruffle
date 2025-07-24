@@ -246,18 +246,9 @@ jobs:
             sudo mkdir -p $SYSROOT_DIR/usr/include/sys
             echo "#define _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h >/dev/null
             
-            # 使用echo命令逐行写入补丁文件内容
-            echo "直接写入补丁文件内容修复 Meson 语法错误..."
-            echo "--- meson.build.orig" > meson_fix.patch
-            echo "+++ meson.build" >> meson_fix.patch
-            echo "@@ -546,7 +546,7 @@" >> meson_fix.patch
-            echo "                 if have" >> meson_fix.patch
-            echo "                         decl_conf.set('10', 1)" >> meson_fix.patch
-            echo "                 endif" >> meson_fix.patch
-            echo "-        endif" >> meson_fix.patch
-            echo "+        endforeach" >> meson_fix.patch
-            
-            patch -p1 < meson_fix.patch
+            # ==== 修复部分：直接修改文件修复 Meson 语法错误 ====
+            echo "直接修改文件修复 Meson 语法错误..."
+            sed -i '546s/endif/endforeach/' meson.build
             
             # 彻底禁用mount依赖
             # 1. 删除所有对mount的依赖检查
