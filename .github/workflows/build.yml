@@ -296,7 +296,15 @@ jobs:
           endian = 'little'
           EOF
           
-          # 修复：使用有效的Meson选项
+          # 关键修复：确保使用宿主机Python而不是交叉编译的Python
+          # 安装jinja2到系统Python
+          sudo pip3 install jinja2
+          
+          # 设置Python环境变量
+          export PYTHON=$(which python3)
+          echo "使用Python路径: $PYTHON"
+          
+          # 使用有效的Meson选项
           meson setup \
             --cross-file cross-file.txt \
             -Dprefix="$SYSROOT_DIR/usr" \
