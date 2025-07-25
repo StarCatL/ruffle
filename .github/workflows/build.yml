@@ -169,6 +169,7 @@ jobs:
       - name: Build dependencies for aarch64 musl
         run: |
           echo "安装构建工具..."
+          # 确保安装meson和ninja-build
           sudo apt-get install -y meson ninja-build
           
           echo "构建 aarch64 musl 依赖库..."
@@ -295,7 +296,7 @@ jobs:
             --cross-file cross-file.txt \
             -Dprefix="$SYSROOT_DIR/usr" \
             -Dmode=release \
-            -Dtests=disabled \
+            -Dtests=false \  # 修复此处：将 "disabled" 改为 "false"
             -Dlink-udev-shared=false \
             -Ddefault_library=static \
             -Dstatic-libudev=true \
