@@ -231,9 +231,30 @@ jobs:
           make CC="$CC" AR="$AR" RANLIB="$RANLIB" \
               CFLAGS="$CFLAGS -I$PWD/libcap/include" \
               LDFLAGS="$LDFLAGS" \
-              DESTDIR="$SYSROOT_DIR" \
-              lib=lib prefix=/usr \
-              install-static
+              lib=lib prefix=/usr
+          
+          # 手动安装到 sysroot
+          sudo mkdir -p "$SYSROOT_DIR/usr/lib"
+          sudo cp libcap/libcap.a "$SYSROOT_DIR/usr/lib"
+          sudo mkdir -p "$SYSROOT_DIR/usr/include/sys"
+          sudo cp libcap/include/capability.h "$SYSROOT_DIR/usr/include/sys/capability.h"
+          sudo mkdir -p "$SYSROOT_DIR/usr/include/linux"
+          sudo cp libcap/include/uapi/linux/capability.h "$SYSROOT_DIR/usr/include/linux"
+          
+          # 创建 pkg-config 文件
+          echo "prefix=$SYSROOT_DIR/usr" > libcap.pc
+          echo "exec_prefix=\${prefix}" >> libcap.pc
+          echo "libdir=\${exec_prefix}/lib" >> libcap.pc
+          echo "includedir=\${prefix}/include" >> libcap.pc
+          echo "" >> libcap.pc
+          echo "Name: libcap" >> libcap.pc
+          echo "Description: Linux capabilities library" >> libcap.pc
+          echo "Version: $LIBCAP_VERSION" >> libcap.pc
+          echo "Cflags: -I\${includedir}" >> libcap.pc
+          echo "Libs: -L\${libdir} -lcap" >> libcap.pc
+          
+          sudo mkdir -p "$SYSROOT_DIR/usr/lib/pkgconfig"
+          sudo cp libcap.pc "$SYSROOT_DIR/usr/lib/pkgconfig"
           
           cd ..
           
@@ -739,7 +760,7 @@ jobs:
 
       - name: Build web
         env:
-          CFG_RELEASE_CHannel: nightly
+          CFG_RELEASE_CHANNEL: nightly
           VERSION4: ${{ needs.create-nightly-release.outputs.version4 }}
           CARGO_FEATURES: jpegxr
           FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
