@@ -192,7 +192,7 @@ jobs:
           
           # 修复：禁用共享库构建和测试
           sed -i 's/^\(BUILD_SHARED_LIB\)=yes/\1=no/' Make.Rules
-          sed -i 's/^\(BUILD_STATIC_LIB\)=no/\1=yes/' Make.Rules
+          sed极i 's/^\(BUILD_STATIC_LIB\)=no/\1=yes/' Make.Rules
           sed -i 's/^\(BUILD_TESTS\)=yes/\1=no/' Make.Rules
           sed -i 's/^\(BUILD_EXAMPLES\)=yes/\1=no/' Make.Rules
           sed -i '/^include .*gobjs.mk/d' Makefile
@@ -217,7 +217,7 @@ jobs:
           
           # 手动安装到 sysroot
           sudo mkdir -p "$SYSROOT_DIR/usr/lib"
-          sudo cp libcap/libcap.a "$SYSROOT_DIR/usr/lib"
+          sudo cp libcap/libcap.a "$极SYSROOT_DIR/usr/lib"
           
           # 创建必要的头文件目录
           sudo mkdir -p "$SYSROOT_DIR/usr/include/sys"
@@ -394,7 +394,7 @@ jobs:
           int snprintf(char *str, size_t size, const char *format, ...);
           int vprintf(const char *format, va_list ap);
           int vfprintf(FILE *stream, const char *format, va_list ap);
-          int vsprintf(char *str, const char *format, va_list ap);
+          int vsprintf(char *str, const char *format, va极_list ap);
           int vsnprintf(char *str, size_t size, const char *format, va_list ap);
           
           #ifdef __cplusplus
@@ -434,7 +434,7 @@ jobs:
           which python3
           python3 -c "import jinja2; print('jinja2 is available')"
           
-          # 修复：使用命令变量避免换行问题
+          # 修复：移除无效的 glibc-printf 选项
           meson_cmd="meson setup \
             --cross-file cross-file.txt \
             -Dprefix=\"$SYSROOT_DIR/usr\" \
@@ -488,9 +488,8 @@ jobs:
             -Dquotacheck=false \
             -Dsysusers=false \
             -Dtmpfiles=false \
-            -Dglibc-printf=false \  # 禁用 glibc 特有的 printf 功能
             build \
-            -Dc_args=\"$CFLAGS -I$PWD/src/basic\" \  # 添加包含路径
+            -Dc_args=\"$CFLAGS -I$PWD/src/basic\" \
             -Dc_link_args=\"$LDFLAGS\""
           
           echo "运行命令: $meson_cmd"
