@@ -296,7 +296,7 @@ jobs:
           endian = 'little'
           EOF
           
-          # 使用有效的Meson选项
+          # 修复：使用有效的Meson选项
           meson setup \
             --cross-file cross-file.txt \
             -Dprefix="$SYSROOT_DIR/usr" \
@@ -305,10 +305,8 @@ jobs:
             -Dlink-udev-shared=false \
             -Ddefault_library=static \
             -Dstatic-libudev=true \
-            -Dlibudev=true \
             -Dman=false \
             -Ddbus=false \
-            -Ddocumentation=false \
             -Dutmp=false \
             -Dhibernate=false \
             -Dldconfig=false \
