@@ -296,6 +296,7 @@ jobs:
           endian = 'little'
           EOF
           
+          # 使用有效的Meson选项
           meson setup \
             --cross-file cross-file.txt \
             -Dprefix="$SYSROOT_DIR/usr" \
@@ -305,10 +306,51 @@ jobs:
             -Ddefault_library=static \
             -Dstatic-libudev=true \
             -Dlibudev=true \
-            -Ddisable-all-system-features=true \
-            -Ddisable-all-user-features=true \
-            -Ddisable-manpages=true \
-            -Ddisable-dbus=true \
+            -Dman=false \
+            -Ddbus=false \
+            -Ddocumentation=false \
+            -Dutmp=false \
+            -Dhibernate=false \
+            -Dldconfig=false \
+            -Dresolve=false \
+            -Defi=false \
+            -Dtpm=false \
+            -Dadm-group=false \
+            -Dwheel-group=false \
+            -Dzlib=false \
+            -Dgshadow=false \
+            -Dima=false \
+            -Dsmack=false \
+            -Dgcrypt=false \
+            -Dp11kit=false \
+            -Dlibidn=false \
+            -Dlibidn2=false \
+            -Dlibiptc=false \
+            -Delfutils=false \
+            -Dbinfmt=false \
+            -Drepart=false \
+            -Dcoredump=false \
+            -Dpolkit=false \
+            -Dlogind=false \
+            -Dhostnamed=false \
+            -Dlocaled=false \
+            -Dmachined=false \
+            -Dnetworkd=false \
+            -Dtimedated=false \
+            -Dtimesyncd=false \
+            -Dremote=false \
+            -Dcreate-log-dirs=false \
+            -Dnss-myhostname=false \
+            -Dnss-mymachines=false \
+            -Dnss-resolve=false \
+            -Dnss-systemd=false \
+            -Dfirstboot=false \
+            -Drandomseed=false \
+            -Dbacklight=false \
+            -Dvconsole=false \
+            -Dquotacheck=false \
+            -Dsysusers=false \
+            -Dtmpfiles=false \
             build \
             -Dc_args="$CFLAGS" \
             -Dc_link_args="$LDFLAGS"
