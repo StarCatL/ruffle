@@ -168,12 +168,15 @@ jobs:
 
       - name: Build dependencies for aarch64 musl
         run: |
+          echo "安装构建工具..."
+          sudo apt-get install -y meson ninja-build
+          
           echo "构建 aarch64 musl 依赖库..."
           DEPS_DIR="/tmp/musl-deps"
           mkdir -p "$DEPS_DIR"
           cd "$DEPS_DIR"
           
-          # 安装构建工具
+          # 安装其他构建工具
           sudo apt-get install -y autoconf automake libtool m4 gcc
           
           # 构建 libcap
