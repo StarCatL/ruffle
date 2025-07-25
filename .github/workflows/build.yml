@@ -423,8 +423,13 @@ jobs:
             -Dc_args="$CFLAGS" \
             -Dc_link_args="$LDFLAGS"
           
-          ninja -C build src/libudev/libudev.a
+          # 关键修复：使用正确的目标名称构建静态库
+          # 首先尝试构建整个项目，但只构建必要部分
+          ninja -C build
+          
+          # 如果构建成功，安装整个项目
           sudo ninja -C build install
+          
           cd ..
           
           # 验证安装
