@@ -176,23 +176,30 @@ jobs:
           # 安装构建工具
           sudo apt-get install -y autoconf automake libtool m4 gcc
           
-          # 修复：确保内核头文件存在
-          sudo mkdir -p /usr/include/linux
-          sudo cp -r /usr/include/linux/* /usr/include/linux/ || true
+          # 修复1: 不再尝试复制头文件到 /usr/include
           
-          # 构建 libcap
+          # 修复2: 构建 libcap - 使用 sysroot 中的头文件
           LIBCAP_VERSION="2.69"
           wget "https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-$LIBCAP_VERSION.tar.xz"
           tar xf "libcap-$LIBCAP_VERSION.tar.xz"
           cd "libcap-$LIBCAP_VERSION"
           
-          # 修复：添加必要的包含路径
-          export CFLAGS="$CFLAGS -I/usr/include"
-          make CC="$CC" AR="$AR" RANLIB="$RANLIB" \
-              BUILD_CC="gcc" \
-              CFLAGS="$CFLAGS -I$PWD/libcap/include" \
-              LDFLAGS="$LDFLAGS" \
-              lib=lib prefix=/usr
+          # 修复3: 使用正确的内核头文件路径
+          # 设置内核头文件路径到 sysroot
+          export KERNEL_HEADERS="$SYSROOT_DIR/usr/include"
+          
+          # 修复4: 修改 Makefile 以使用正确的路径
+          sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" Make.Rules
+          sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" libcap/Makefile
+          
+          # 修复5: 使用 BUILD_CC 构建工具
+          make BUILD_CC="gcc" \
+               CC="$CC" \
+               AR="$AR" \
+               RANLIB="$RANLIB" \
+               CFLAGS="$CFLAGS -I$PWD/libcap/include" \
+               LDFLAGS="$LDFLAGS" \
+               lib=lib prefix=/usr
           
           # 手动安装到 sysroot
           sudo mkdir -p "$SYSROOT_DIR/usr/lib"
@@ -249,7 +256,7 @@ jobs:
           tar xf "v$UDEV_VERSION.tar.gz"
           cd "systemd-$UDEV_VERSION"
           
-          # 修复：使用正确的交叉编译配置
+          # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
           [binaries]
           c = 'aarch64-buildroot-linux-musl-gcc'
