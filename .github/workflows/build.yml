@@ -182,7 +182,7 @@ jobs:
           cd "$DEPS_DIR"
           
           # 安装其他构建工具
-          sudo apt-get install -y autoconf automake libtool m4 gcc gperf
+          sudo apt-get install -y autoconf automake libtool m4 gcc gperf pkg-config
           
           # 构建 libcap
           LIBCAP_VERSION="2.69"
@@ -270,6 +270,29 @@ jobs:
             LDFLAGS="$LDFLAGS"
             
           # 构建并安装
+          make -j$(nproc)
+          sudo make install
+          cd ..
+          
+          # 构建 util-linux (提供 libmount)
+          UTIL_LINUX_VERSION="2.39.3"
+          wget "https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v${UTIL_LINUX_VERSION%.*}/util-linux-$UTIL_LINUX_VERSION.tar.gz"
+          tar xf "util-linux-$UTIL_LINUX_VERSION.tar.gz"
+          cd "util-linux-$UTIL_LINUX_VERSION"
+          
+          ./configure \
+            --host=aarch64-buildroot-linux-musl \
+            --prefix="$SYSROOT_DIR/usr" \
+            --disable-all-programs \
+            --enable-libmount \
+            --enable-static \
+            --disable-shared \
+            --without-python \
+            --without-systemd \
+            --without-udev \
+            CFLAGS="$CFLAGS" \
+            LDFLAGS="$LDFLAGS"
+            
           make -j$(nproc)
           sudo make install
           cd ..
@@ -373,10 +396,11 @@ jobs:
           
           # 验证安装
           echo "依赖库构建完成:"
-          ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev}.a
+          ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev,mount}.a
           echo "头文件验证:"
           ls -l "$SYSROOT_DIR/usr/include/sys/capability.h"
           ls -l "$SYSROOT_DIR/usr/include/linux/capability.h"
+          ls -l "$SYSROOT_DIR/usr/include/libmount/libmount.h"
 
       - name: Cargo build
         run: |
@@ -388,7 +412,7 @@ jobs:
         env:
           CFG_RELEASE_CHANNEL: nightly
           # 添加必要的静态链接参数
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C link-arg=-lcap -C link-arg=-ludev -C link-arg=-lasound"
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C link-arg=-lcap -C link-arg=-ludev -C link-arg=-lasound -C link-arg=-lmount"
 
       - name: Verify static linking
         run: |
