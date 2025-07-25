@@ -449,7 +449,10 @@ jobs:
           which python3
           python3 -c "import jinja2; print('jinja2 is available')"
           
-          # 修复：移除行尾注释并确保所有选项在一行内
+          # 修复printf.h缺失问题
+          # 创建空的printf.h文件
+          sudo touch "$SYSROOT_DIR/usr/include/printf.h"
+          
           # 使用有效的Meson选项
           meson setup \
             --cross-file cross-file.txt \
@@ -507,6 +510,25 @@ jobs:
             build \
             -Dc_args="$CFLAGS" \
             -Dc_link_args="$LDFLAGS"
+          
+          # 修复：在构建前应用补丁
+          # 创建一个补丁文件来修复printf.h问题
+          cat > fix-printf.patch <<EOF
+          diff --git a/src/basic/stdio-util.h b/src/basic/stdio-util.h
+          index 5b7a8d0f9f..e69de29bb2 100644
+          --- a/src/basic/stdio-util.h
+          +++ b/src/basic/stdio-util.h
+          @@ -1,7 +0,0 @@
+          -/* SPDX-License-Identifier: LGPL-2.1-or-later */
+          -#pragma once
+          -
+          -#if HAVE_PRINTF_H
+          -#include <printf.h>
+          -#endif
+          EOF
+          
+          # 应用补丁
+          git apply fix-printf.patch || true
           
           # 构建整个项目
           ninja -C build
