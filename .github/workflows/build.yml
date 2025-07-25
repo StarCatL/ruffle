@@ -404,10 +404,10 @@ jobs:
           which python3
           python3 -c "import jinja2; print('jinja2 is available')"
           
-          # 使用有效的Meson选项
-          meson setup \
+          # 修复：使用命令变量避免换行问题
+          meson_cmd="meson setup \
             --cross-file cross-file.txt \
-            -Dprefix="$SYSROOT_DIR/usr" \
+            -Dprefix=\"$SYSROOT_DIR/usr\" \
             -Dmode=release \
             -Dtests=false \
             -Dlink-udev-shared=false \
@@ -424,7 +424,7 @@ jobs:
             -Dadm-group=false \
             -Dwheel-group=false \
             -Dzlib=false \
-            -Dzstd=false \  # 修复：使用正确的布尔值 false 而不是 disabled
+            -Dzstd=false \
             -Dgshadow=false \
             -Dima=false \
             -Dsmack=false \
@@ -459,8 +459,11 @@ jobs:
             -Dsysusers=false \
             -Dtmpfiles=false \
             build \
-            -Dc_args="$CFLAGS" \
-            -Dc_link_args="$LDFLAGS"
+            -Dc_args=\"$CFLAGS\" \
+            -Dc_link_args=\"$LDFLAGS\""
+          
+          echo "运行命令: $meson_cmd"
+          eval "$meson_cmd"
           
           # 构建整个项目
           ninja -C build
