@@ -424,6 +424,7 @@ jobs:
             -Dadm-group=false \
             -Dwheel-group=false \
             -Dzlib=false \
+            -Dzstd=disabled \  # 修复：禁用zstd支持
             -Dgshadow=false \
             -Dima=false \
             -Dsmack=false \
