@@ -176,30 +176,36 @@ jobs:
           # 安装构建工具
           sudo apt-get install -y autoconf automake libtool m4 gcc
           
-          # 修复1: 不再尝试复制头文件到 /usr/include
-          
-          # 修复2: 构建 libcap - 使用 sysroot 中的头文件
+          # 构建 libcap
           LIBCAP_VERSION="2.69"
           wget "https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-$LIBCAP_VERSION.tar.xz"
           tar xf "libcap-$LIBCAP_VERSION.tar.xz"
           cd "libcap-$LIBCAP_VERSION"
           
-          # 修复3: 使用正确的内核头文件路径
+          # 修复：禁用共享库构建和测试
+          sed -i 's/^\(BUILD_SHARED_LIB\)=yes/\1=no/' Make.Rules
+          sed -i 's/^\(BUILD_STATIC_LIB\)=no/\1=yes/' Make.Rules
+          sed -i 's/^\(BUILD_TESTS\)=yes/\1=no/' Make.Rules
+          sed -i 's/^\(BUILD_EXAMPLES\)=yes/\1=no/' Make.Rules
+          sed -i '/^include .*gobjs.mk/d' Makefile
+          sed -i '/^include .*gperf.mk/d' Makefile
+          
           # 设置内核头文件路径到 sysroot
           export KERNEL_HEADERS="$SYSROOT_DIR/usr/include"
           
-          # 修复4: 修改 Makefile 以使用正确的路径
+          # 修改 Makefile 以使用正确的路径
           sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" Make.Rules
           sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" libcap/Makefile
           
-          # 修复5: 使用 BUILD_CC 构建工具
+          # 只构建静态库
           make BUILD_CC="gcc" \
                CC="$CC" \
                AR="$AR" \
                RANLIB="$RANLIB" \
                CFLAGS="$CFLAGS -I$PWD/libcap/include" \
                LDFLAGS="$LDFLAGS" \
-               lib=lib prefix=/usr
+               lib=lib prefix=/usr \
+               -C libcap libcap.a
           
           # 手动安装到 sysroot
           sudo mkdir -p "$SYSROOT_DIR/usr/lib"
