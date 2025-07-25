@@ -248,7 +248,7 @@ jobs:
           export KERNEL_HEADERS="$SYSROOT_DIR/usr/include"
           
           # 修改 Makefile 以使用正确的路径
-          sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" Make.Rules
+          sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADers|" Make.Rules
           sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" libcap/Makefile
           
           # 只构建静态库
@@ -414,7 +414,7 @@ jobs:
           cd ..
           
           # 构建 libudev
-          UDEV_VERSION="252"
+          UDEV_VERSION="254.9"  # 更新到较新版本
           wget "https://github.com/systemd/systemd/archive/refs/tags/v$UDEV_VERSION.tar.gz"
           tar xf "v$UDEV_VERSION.tar.gz"
           cd "systemd-$UDEV_VERSION"
@@ -449,9 +449,83 @@ jobs:
           which python3
           python3 -c "import jinja2; print('jinja2 is available')"
           
-          # 修复printf.h缺失问题
-          # 创建空的printf.h文件
-          sudo touch "$SYSROOT_DIR/usr/include/printf.h"
+          # 修复：在构建前应用补丁解决musl兼容性问题
+          # 创建补丁文件解决prctl_mm_map重定义和dirent64问题
+          cat > musl-compat.patch <<EOF
+          diff --git a/src/basic/missing_prctl.h b/src/basic/missing_prctl.h
+          index 5b7a8d0f9f..a1b2c3d4e5 100644
+          --- a/src/basic/missing_prctl.h
+          +++ b/src/basic/missing_prctl.h
+          @@ -1,7 +1,9 @@
+           /* SPDX-License-Identifier: LGPL-2.1-or-later */
+           #pragma once
+           
+          -#if HAVE_PRINTF_H
+          -#include <printf.h>
+          +#include <features.h>
+          +
+          +#ifdef __GLIBC__
+          +#  include <printf.h>
+           #endif
+           
+           #ifndef PR_SET_IO_FLUSHER
+          diff --git a/src/basic/dirent-util.h b/src/basic/dirent-util.h
+          index 7a3a5b5e1d..e69de29bb2 100644
+          --- a/src/basic/dirent-util.h
+          +++ b/src/basic/dirent-util.h
+          @@ -1,44 +0,0 @@
+          -/* SPDX-License-Identifier: LGPL-2.1-or-later */
+          -#pragma once
+          -
+          -#include <dirent.h>
+          -#include <errno.h>
+          -#include <sys/types.h>
+          -
+          -#include "macro.h"
+          -
+          -struct dirent* readdir_no_dot(DIR *dirp);
+          -
+          -#define FOREACH_DIRENT(de, dir, log_error)                          \
+          -        for (errno = 0, de = readdir(dir);; errno = 0, de = readdir(dir)) \
+          -                if (!de) {                                          \
+          -                        if (errno > 0) {                            \
+          -                                log_error("readdir failed: %m");    \
+          -                        }                                           \
+          -                        break;                                      \
+          -                } else if (hidden_or_backup_file((de)->d_name))     \
+          -                        continue;                                   \
+          -                else
+          -
+          -#define FOREACH_DIRENT_ALL(de, dir, log_error)                     \
+          -        for (errno = 0, de = readdir(dir);; errno = 0, de = readdir(dir)) \
+          -                if (!de) {                                          \
+          -                        if (errno > 0) {                            \
+          -                                log_error("readdir failed: %m");    \
+          -                        }                                           \
+          -                        break;                                      \
+          -                } else
+          -
+          -/* Maximum space one dirent structure might require at most */
+          -#define DIRENT_SIZE_MAX CONST_MAX(sizeof(struct dirent), offsetof(struct dirent, d_name) + NAME_MAX + 1)
+          -
+          -/* Only if 64-bit ino_t is actually implemented */
+          -#if defined __LP64__ || defined __x86_64__ || defined __aarch64__ || defined __s390x__
+          -assert_cc(sizeof(struct dirent) == sizeof(struct dirent64));
+          -assert_cc(offsetof(struct dirent, d_ino) == offsetof(struct dirent64, d_ino));
+          -assert_cc(sizeof_field(struct dirent, d_ino) == sizeof_field(struct dirent64, d_ino));
+          -assert_cc(offsetof(struct dirent, d_off) == offsetof(struct dirent64, d_off));
+          -assert_cc(sizeof_field(struct dirent, d_off) == sizeof_field(struct dirent64, d_off));
+          -assert_cc(offsetof(struct dirent, d_reclen) == offsetof(struct dirent64, d_reclen));
+          -assert_cc(sizeof_field(struct dirent, d_reclen) == sizeof_field(struct dirent64, d_reclen));
+          -assert_cc(offsetof(struct dirent, d_type) == offsetof(struct dirent64, d_type));
+          -assert_cc(sizeof_field(struct dirent, d_type) == sizeof_field(struct dirent64, d_type));
+          -assert_cc(offsetof(struct dirent, d_name) == offsetof(struct dirent64, d_name));
+          -assert_cc(sizeof_field(struct dirent, d_name) == sizeof_field(struct dirent64, d_name));
+          -#endif
+          EOF
+          
+          # 应用补丁
+          git apply musl-compat.patch || true
           
           # 使用有效的Meson选项
           meson setup \
@@ -510,25 +584,6 @@ jobs:
             build \
             -Dc_args="$CFLAGS" \
             -Dc_link_args="$LDFLAGS"
-          
-          # 修复：在构建前应用补丁
-          # 创建一个补丁文件来修复printf.h问题
-          cat > fix-printf.patch <<EOF
-          diff --git a/src/basic/stdio-util.h b/src/basic/stdio-util.h
-          index 5b7a8d0f9f..e69de29bb2 100644
-          --- a/src/basic/stdio-util.h
-          +++ b/src/basic/stdio-util.h
-          @@ -1,7 +0,0 @@
-          -/* SPDX-License-Identifier: LGPL-2.1-or-later */
-          -#pragma once
-          -
-          -#if HAVE_PRINTF_H
-          -#include <printf.h>
-          -#endif
-          EOF
-          
-          # 应用补丁
-          git apply fix-printf.patch || true
           
           # 构建整个项目
           ninja -C build
