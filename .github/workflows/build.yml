@@ -274,25 +274,58 @@ jobs:
           sudo make install
           cd ..
           
-          # 构建 util-linux (提供 libmount)
+          # 构建 util-linux (提供 libblkid 和 libmount)
           UTIL_LINUX_VERSION="2.39.3"
           wget "https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v${UTIL_LINUX_VERSION%.*}/util-linux-$UTIL_LINUX_VERSION.tar.gz"
           tar xf "util-linux-$UTIL_LINUX_VERSION.tar.gz"
           cd "util-linux-$UTIL_LINUX_VERSION"
           
+          # 修复：添加缺失的头文件宏
+          cat > include/missing.h <<EOF
+          #ifndef MISSING_H
+          #define MISSING_H
+          
+          #define __STRING(x) #x
+          #define _dlsym_control_001 1
+          #define _dlsym_pcm_001 1
+          
+          #endif /* MISSING_H */
+          EOF
+          
+          # 修复：添加缺失的 isnan 实现
+          cat >> include/missing.h <<EOF
+          
+          #ifndef isnan
+          #define isnan(x) __builtin_isnan(x)
+          #endif
+          EOF
+          
+          # 将自定义头文件包含到 config.h
+          echo "#include \"missing.h\"" >> config.h.in
+          
+          # 配置 util-linux
           ./configure \
             --host=aarch64-buildroot-linux-musl \
             --prefix="$SYSROOT_DIR/usr" \
             --disable-all-programs \
+            --enable-libblkid \
             --enable-libmount \
             --enable-static \
             --disable-shared \
             --without-python \
             --without-systemd \
             --without-udev \
-            CFLAGS="$CFLAGS" \
+            --without-ncurses \
+            --without-ncursesw \
+            --without-tinfo \
+            --without-readline \
+            --disable-makeinstall-chown \
+            --disable-makeinstall-setuid \
+            --without-btrfs \
+            CFLAGS="$CFLAGS -I$PWD/include" \
             LDFLAGS="$LDFLAGS"
             
+          # 构建并安装
           make -j$(nproc)
           sudo make install
           cd ..
@@ -396,10 +429,11 @@ jobs:
           
           # 验证安装
           echo "依赖库构建完成:"
-          ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev,mount}.a
+          ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev,blkid,mount}.a
           echo "头文件验证:"
           ls -l "$SYSROOT_DIR/usr/include/sys/capability.h"
           ls -l "$SYSROOT_DIR/usr/include/linux/capability.h"
+          ls -l "$SYSROOT_DIR/usr/include/blkid/blkid.h"
           ls -l "$SYSROOT_DIR/usr/include/libmount/libmount.h"
 
       - name: Cargo build
@@ -412,7 +446,7 @@ jobs:
         env:
           CFG_RELEASE_CHANNEL: nightly
           # 添加必要的静态链接参数
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C link-arg=-lcap -C link-arg=-ludev -C link-arg=-lasound -C link-arg=-lmount"
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C link-arg=-lcap -C link-arg=-ludev -C link-arg=-lasound -C link-arg=-lblkid -C link-arg=-lmount"
 
       - name: Verify static linking
         run: |
