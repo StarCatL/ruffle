@@ -217,7 +217,9 @@ jobs:
           
           # 修复：使用正确的路径复制头文件
           sudo cp libcap/include/sys/capability.h "$SYSROOT_DIR/usr/include/sys/"
-          sudo cp include/uapi/linux/capability.h "$SYSROOT_DIR/usr/include/linux/"
+          
+          # 修复：使用正确的uapi路径复制头文件
+          sudo cp libcap/include/uapi/linux/capability.h "$SYSROOT_DIR/usr/include/linux/"
           
           # 创建 pkg-config 文件
           echo "prefix=$SYSROOT_DIR/usr" > libcap.pc
