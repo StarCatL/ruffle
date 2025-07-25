@@ -215,9 +215,9 @@ jobs:
           sudo mkdir -p "$SYSROOT_DIR/usr/include/sys"
           sudo mkdir -p "$SYSROOT_DIR/usr/include/linux"
           
-          # 安装头文件到正确位置
-          sudo cp libcap/include/capability.h "$SYSROOT_DIR/usr/include/sys/capability.h"
-          sudo cp libcap/include/uapi/linux/capability.h "$SYSROOT_DIR/usr/include/linux/"
+          # 修复：使用正确的路径复制头文件
+          sudo cp include/sys/capability.h "$SYSROOT_DIR/usr/include/sys/capability.h"
+          sudo cp include/uapi/linux/capability.h "$SYSROOT_DIR/usr/include/linux/"
           
           # 创建 pkg-config 文件
           echo "prefix=$SYSROOT_DIR/usr" > libcap.pc
