@@ -170,7 +170,7 @@ jobs:
         run: |
           echo "安装构建工具..."
           # 确保安装meson和ninja-build
-          sudo apt-get install -y meson ninja-build
+          sudo apt-get install -y meson ninja-build pkg-config zlib1g-dev
           
           # 修复：安装Python依赖
           sudo apt-get install -y python3 python3-pip
@@ -182,7 +182,45 @@ jobs:
           cd "$DEPS_DIR"
           
           # 安装其他构建工具
-          sudo apt-get install -y autoconf automake libtool m4 gcc gperf pkg-config
+          sudo apt-get install -y autoconf automake libtool m4 gcc gperf
+          
+          # 构建 zstd 库
+          ZSTD_VERSION="1.5.5"
+          wget "https://github.com/facebook/zstd/releases/download/v${ZSTD_VERSION}/zstd-${ZSTD_VERSION}.tar.gz"
+          tar xf "zstd-${ZSTD_VERSION}.tar.gz"
+          cd "zstd-${ZSTD_VERSION}"
+          
+          # 构建静态库
+          make \
+            CC="$CC" \
+            AR="$AR" \
+            RANLIB="$RANLIB" \
+            CFLAGS="$CFLAGS" \
+            LDFLAGS="$LDFLAGS" \
+            -C lib libzstd.a
+          
+          # 安装到 sysroot
+          sudo mkdir -p "$SYSROOT_DIR/usr/include"
+          sudo cp lib/zstd.h "$SYSROOT_DIR/usr/include"
+          sudo cp lib/common/zstd_errors.h "$SYSROOT_DIR/usr/include"
+          sudo cp lib/zstd_errors.h "$SYSROOT_DIR/usr/include"
+          sudo cp lib/libzstd.a "$SYSROOT_DIR/usr/lib"
+          
+          # 创建 pkg-config 文件
+          echo "prefix=$SYSROOT_DIR/usr" > libzstd.pc
+          echo "exec_prefix=\${prefix}" >> libzstd.pc
+          echo "libdir=\${exec_prefix}/lib" >> libzstd.pc
+          echo "includedir=\${prefix}/include" >> libzstd.pc
+          echo "" >> libzstd.pc
+          echo "Name: zstd" >> libzstd.pc
+          echo "Description: fast lossless compression algorithm library" >> libzstd.pc
+          echo "Version: $ZSTD_VERSION" >> libzstd.pc
+          echo "Cflags: -I\${includedir}" >> libzstd.pc
+          echo "Libs: -L\${libdir} -lzstd" >> libzstd.pc
+          
+          sudo mkdir -p "$SYSROOT_DIR/usr/lib/pkgconfig"
+          sudo cp libzstd.pc "$SYSROOT_DIR/usr/lib/pkgconfig"
+          cd ..
           
           # 构建 libcap
           LIBCAP_VERSION="2.69"
@@ -424,6 +462,7 @@ jobs:
             -Dadm-group=false \
             -Dwheel-group=false \
             -Dzlib=false \
+            -Dzstd=true \  # 启用zstd支持
             -Dgshadow=false \
             -Dima=false \
             -Dsmack=false \
@@ -471,13 +510,14 @@ jobs:
           
           # 验证安装
           echo "依赖库构建完成:"
-          ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev,blkid,mount,lz4}.a
+          ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev,blkid,mount,lz4,zstd}.a
           echo "头文件验证:"
           ls -l "$SYSROOT_DIR/usr/include/sys/capability.h"
           ls -l "$SYSROOT_DIR/usr/include/linux/capability.h"
           ls -l "$SYSROOT_DIR/usr/include/blkid/blkid.h"
           ls -l "$SYSROOT_DIR/usr/include/libmount/libmount.h"
           ls -l "$SYSROOT_DIR/usr/include/lz4.h"
+          ls -l "$SYSROOT_DIR/usr/include/zstd.h"
 
       - name: Cargo build
         run: |
@@ -489,7 +529,7 @@ jobs:
         env:
           CFG_RELEASE_CHANNEL: nightly
           # 添加必要的静态链接参数
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C link-arg=-lcap -C link-arg=-ludev -C link-arg=-lasound -C link-arg=-lblkid -C link-arg=-lmount -C link-arg=-llz4"
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C link-arg=-lcap -C link-arg=-ludev -C link-arg=-lasound -C link-arg=-lblkid -C link-arg=-lmount -C link-arg=-llz4 -C link-arg=-lzstd"
 
       - name: Verify static linking
         run: |
