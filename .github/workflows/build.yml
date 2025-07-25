@@ -215,8 +215,8 @@ jobs:
           mkdir -p "$DEPS_DIR"
           cd "$DEPS_DIR"
           
-          # 安装构建工具
-          sudo apt-get install -y autoconf automake libtool m4
+          # 安装构建工具（包括主机编译器）
+          sudo apt-get install -y autoconf automake libtool m4 gcc
           
           # 构建 libcap
           LIBCAP_VERSION="2.69"
@@ -227,8 +227,12 @@ jobs:
           # 修复头文件包含问题
           sed -i '1i#include <linux/capability.h>' libcap/include/uapi/linux/capability.h
           
+          # 设置主机编译器（用于构建构建工具）
+          export BUILD_CC="gcc"
+          
           # 配置并构建
           make CC="$CC" AR="$AR" RANLIB="$RANLIB" \
+              BUILD_CC="$BUILD_CC" \
               CFLAGS="$CFLAGS -I$PWD/libcap/include" \
               LDFLAGS="$LDFLAGS" \
               lib=lib prefix=/usr
@@ -261,7 +265,7 @@ jobs:
           # 构建 ALSA
           ALSA_VERSION="1.2.10"
           wget "https://www.alsa-project.org/files/pub/lib/alsa-lib-$ALSA_VERSION.tar.bz2"
-          tar xf "alsa-lib-$ALSA_VERSION.tar.bz2"
+          tar xf "alsa-lib-$ALsa_VERSION.tar.bz2"
           cd "alsa-lib-$ALSA_VERSION"
           
           ./configure \
