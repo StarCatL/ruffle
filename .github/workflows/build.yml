@@ -184,7 +184,7 @@ jobs:
           # 安装其他构建工具
           sudo apt-get install -y autoconf automake libtool m4 gcc gperf
           
-          # 构建 zstd 库
+          # 构建 zstd 库 - 修复头文件问题
           ZSTD_VERSION="1.5.5"
           wget "https://github.com/facebook/zstd/releases/download/v${ZSTD_VERSION}/zstd-${ZSTD_VERSION}.tar.gz"
           tar xf "zstd-${ZSTD_VERSION}.tar.gz"
@@ -199,11 +199,19 @@ jobs:
             LDFLAGS="$LDFLAGS" \
             -C lib libzstd.a
           
-          # 安装到 sysroot
+          # 安装到 sysroot - 修复头文件路径
           sudo mkdir -p "$SYSROOT_DIR/usr/include"
           sudo cp lib/zstd.h "$SYSROOT_DIR/usr/include"
-          sudo cp lib/common/zstd_errors.h "$SYSROOT_DIR/usr/include"
-          sudo cp lib/zstd_errors.h "$SYSROOT_DIR/usr/include"
+          
+          # 修复：zstd_errors.h 在 common 目录下
+          if [ -f "lib/common/zstd_errors.h" ]; then
+            sudo cp lib/common/zstd_errors.h "$SYSROOT_DIR/usr/include"
+          elif [ -f "lib/zstd_errors.h" ]; then
+            sudo cp lib/zstd_errors.h "$SYSROOT_DIR/usr/include"
+          else
+            echo "警告: 未找到 zstd_errors.h 文件"
+          fi
+          
           sudo cp lib/libzstd.a "$SYSROOT_DIR/usr/lib"
           
           # 创建 pkg-config 文件
@@ -281,7 +289,6 @@ jobs:
           
           sudo mkdir -p "$SYSROOT_DIR/usr/lib/pkgconfig"
           sudo cp libcap.pc "$SYSROOT_DIR/usr/lib/pkgconfig"
-          
           cd ..
           
           # 构建 ALSA
