@@ -330,6 +330,44 @@ jobs:
           sudo make install
           cd ..
           
+          # 构建 lz4 库
+          LZ4_VERSION="1.9.4"
+          wget "https://github.com/lz4/lz4/archive/refs/tags/v$LZ4_VERSION.tar.gz"
+          tar xf "v$LZ4_VERSION.tar.gz"
+          cd "lz4-$LZ4_VERSION"
+          
+          # 构建静态库
+          make \
+            CC="$CC" \
+            AR="$AR" \
+            RANLIB="$RANLIB" \
+            CFLAGS="$CFLAGS" \
+            LDFLAGS="$LDFLAGS" \
+            liblz4.a
+          
+          # 安装到 sysroot
+          sudo mkdir -p "$SYSROOT_DIR/usr/include"
+          sudo cp lib/lz4.h "$SYSROOT_DIR/usr/include"
+          sudo cp lib/lz4hc.h "$SYSROOT_DIR/usr/include"
+          sudo cp lib/lz4frame.h "$SYSROOT_DIR/usr/include"
+          sudo cp lib/liblz4.a "$SYSROOT_DIR/usr/lib"
+          
+          # 创建 pkg-config 文件
+          echo "prefix=$SYSROOT_DIR/usr" > liblz4.pc
+          echo "exec_prefix=\${prefix}" >> liblz4.pc
+          echo "libdir=\${exec_prefix}/lib" >> liblz4.pc
+          echo "includedir=\${prefix}/include" >> liblz4.pc
+          echo "" >> liblz4.pc
+          echo "Name: lz4" >> liblz4.pc
+          echo "Description: Lossless compression algorithm" >> liblz4.pc
+          echo "Version: $LZ4_VERSION" >> liblz4.pc
+          echo "Cflags: -I\${includedir}" >> liblz4.pc
+          echo "Libs: -L\${libdir} -llz4" >> liblz4.pc
+          
+          sudo mkdir -p "$SYSROOT_DIR/usr/lib/pkgconfig"
+          sudo cp liblz4.pc "$SYSROOT_DIR/usr/lib/pkgconfig"
+          cd ..
+          
           # 构建 libudev
           UDEV_VERSION="252"
           wget "https://github.com/systemd/systemd/archive/refs/tags/v$UDEV_VERSION.tar.gz"
@@ -423,23 +461,23 @@ jobs:
             -Dc_args="$CFLAGS" \
             -Dc_link_args="$LDFLAGS"
           
-          # 关键修复：使用正确的目标名称构建静态库
-          # 首先尝试构建整个项目，但只构建必要部分
+          # 构建整个项目
           ninja -C build
           
-          # 如果构建成功，安装整个项目
+          # 安装构建结果
           sudo ninja -C build install
           
           cd ..
           
           # 验证安装
           echo "依赖库构建完成:"
-          ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev,blkid,mount}.a
+          ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev,blkid,mount,lz4}.a
           echo "头文件验证:"
           ls -l "$SYSROOT_DIR/usr/include/sys/capability.h"
           ls -l "$SYSROOT_DIR/usr/include/linux/capability.h"
           ls -l "$SYSROOT_DIR/usr/include/blkid/blkid.h"
           ls -l "$SYSROOT_DIR/usr/include/libmount/libmount.h"
+          ls -l "$SYSROOT_DIR/usr/include/lz4.h"
 
       - name: Cargo build
         run: |
@@ -451,7 +489,7 @@ jobs:
         env:
           CFG_RELEASE_CHANNEL: nightly
           # 添加必要的静态链接参数
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C link-arg=-lcap -C link-arg=-ludev -C link-arg=-lasound -C link-arg=-lblkid -C link-arg=-lmount"
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C link-arg=-lcap -C link-arg=-ludev -C link-arg=-lasound -C link-arg=-lblkid -C link-arg=-lmount -C link-arg=-llz4"
 
       - name: Verify static linking
         run: |
