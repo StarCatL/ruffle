@@ -449,6 +449,7 @@ jobs:
           which python3
           python3 -c "import jinja2; print('jinja2 is available')"
           
+          # 修复：移除行尾注释并确保所有选项在一行内
           # 使用有效的Meson选项
           meson setup \
             --cross-file cross-file.txt \
@@ -469,7 +470,7 @@ jobs:
             -Dadm-group=false \
             -Dwheel-group=false \
             -Dzlib=false \
-            -Dzstd=true \  # 启用zstd支持
+            -Dzstd=true \
             -Dgshadow=false \
             -Dima=false \
             -Dsmack=false \
