@@ -244,6 +244,12 @@ jobs:
           tar xf "alsa-lib-$ALSA_VERSION.tar.bz2"
           cd "alsa-lib-$ALSA_VERSION"
           
+          # 修复ALSA构建问题：添加缺失的宏定义
+          # 在文件开头插入必要的宏定义
+          sed -i '1i #define __STRING(x) #x' src/control/control.c
+          sed -i '1i #define _dlsym_control_001 1' src/control/control.c
+          
+          # 配置ALSA
           ./configure \
             --host=aarch64-buildroot-linux-musl \
             --prefix="$SYSROOT_DIR/usr" \
@@ -254,6 +260,7 @@ jobs:
             CFLAGS="$CFLAGS" \
             LDFLAGS="$LDFLAGS"
             
+          # 构建并安装
           make -j$(nproc)
           sudo make install
           cd ..
