@@ -172,13 +172,17 @@ jobs:
           # 确保安装meson和ninja-build
           sudo apt-get install -y meson ninja-build
           
+          # 修复：安装Python依赖
+          sudo apt-get install -y python3 python3-pip
+          sudo pip3 install jinja2
+          
           echo "构建 aarch64 musl 依赖库..."
           DEPS_DIR="/tmp/musl-deps"
           mkdir -p "$DEPS_DIR"
           cd "$DEPS_DIR"
           
           # 安装其他构建工具
-          sudo apt-get install -y autoconf automake libtool m4 gcc
+          sudo apt-get install -y autoconf automake libtool m4 gcc gperf
           
           # 构建 libcap
           LIBCAP_VERSION="2.69"
@@ -296,7 +300,7 @@ jobs:
             --cross-file cross-file.txt \
             -Dprefix="$SYSROOT_DIR/usr" \
             -Dmode=release \
-            -Dtests=false \  # 修复此处：将 "disabled" 改为 "false"
+            -Dtests=false \
             -Dlink-udev-shared=false \
             -Ddefault_library=static \
             -Dstatic-libudev=true \
