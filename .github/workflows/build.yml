@@ -244,10 +244,11 @@ jobs:
           tar xf "alsa-lib-$ALSA_VERSION.tar.bz2"
           cd "alsa-lib-$ALSA_VERSION"
           
-          # 修复ALSA构建问题：添加缺失的宏定义
-          # 在文件开头插入必要的宏定义
-          sed -i '1i #define __STRING(x) #x' src/control/control.c
-          sed -i '1i #define _dlsym_control_001 1' src/control/control.c
+          # 修复ALSA构建问题：添加全局缺失的宏定义
+          # 在全局头文件中定义缺失的宏
+          echo "#define __STRING(x) #x" >> include/global.h
+          echo "#define _dlsym_control_001 1" >> include/control.h
+          echo "#define _dlsym_pcm_001 1" >> include/pcm.h
           
           # 配置ALSA
           ./configure \
