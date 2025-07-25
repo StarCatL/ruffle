@@ -224,9 +224,6 @@ jobs:
           tar xf "libcap-$LIBCAP_VERSION.tar.xz"
           cd "libcap-$LIBCAP_VERSION"
           
-          # 修复头文件包含问题
-          sed -i '1i#include <linux/capability.h>' libcap/include/uapi/linux/capability.h
-          
           # 设置主机编译器（用于构建构建工具）
           export BUILD_CC="gcc"
           
@@ -240,10 +237,14 @@ jobs:
           # 手动安装到 sysroot
           sudo mkdir -p "$SYSROOT_DIR/usr/lib"
           sudo cp libcap/libcap.a "$SYSROOT_DIR/usr/lib"
+          
+          # 创建必要的头文件目录
           sudo mkdir -p "$SYSROOT_DIR/usr/include/sys"
-          sudo cp libcap/include/capability.h "$SYSROOT_DIR/usr/include/sys/capability.h"
           sudo mkdir -p "$SYSROOT_DIR/usr/include/linux"
-          sudo cp libcap/include/uapi/linux/capability.h "$SYSROOT_DIR/usr/include/linux"
+          
+          # 安装头文件到正确位置
+          sudo cp libcap/include/capability.h "$SYSROOT_DIR/usr/include/sys/capability.h"
+          sudo cp libcap/include/uapi/linux/capability.h "$SYSROOT_DIR/usr/include/linux/"
           
           # 创建 pkg-config 文件
           echo "prefix=$SYSROOT_DIR/usr" > libcap.pc
@@ -265,7 +266,7 @@ jobs:
           # 构建 ALSA
           ALSA_VERSION="1.2.10"
           wget "https://www.alsa-project.org/files/pub/lib/alsa-lib-$ALSA_VERSION.tar.bz2"
-          tar xf "alsa-lib-$ALsa_VERSION.tar.bz2"
+          tar xf "alsa-lib-$ALSA_VERSION.tar.bz2"
           cd "alsa-lib-$ALSA_VERSION"
           
           ./configure \
