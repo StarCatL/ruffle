@@ -192,6 +192,7 @@ jobs:
           echo "CC=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-gcc" >> $GITHUB_ENV
           echo "CXX=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-g++" >> $GITHUB_ENV
           echo "AR=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ar" >> $GITHUB_ENV
+          echo "RANLIB=$TOOLCHAIN_PATH/aarch64-buildroot-linux-musl-ranlib" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           echo "PKG_CONFIG_SYSROOT_DIR=$SYSROOT_DIR" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$SYSROOT_DIR/usr/lib/pkgconfig" >> $GITHUB_ENV
@@ -223,45 +224,16 @@ jobs:
           tar xf "libcap-$LIBCAP_VERSION.tar.xz"
           cd "libcap-$LIBCAP_VERSION"
           
-          # 修复头文件包含顺序
-          sed -i "s|#include <errno.h>|#include <errno.h>\n#include <linux/capability.h>|" libcap/include/uapi/linux/capability.h
+          # 修复头文件包含问题
+          sed -i '1i#include <linux/capability.h>' libcap/include/uapi/linux/capability.h
           
-          # 手动构建 libcap
-          cd libcap
-          
-          # 编译所有源文件
-          $CC $CFLAGS -c cap_alloc.c -o cap_alloc.o
-          $CC $CFLAGS -c cap_proc.c -o cap_proc.o
-          $CC $CFLAGS -c cap_extint.c -o cap_extint.o
-          $CC $CFLAGS -c cap_flag.c -o cap_flag.o
-          $CC $CFLAGS -c cap_text.c -o cap_text.o
-          $CC $CFLAGS -c cap_file.c -o cap_file.o
-          
-          # 创建静态库
-          $AR rcs libcap.a cap_alloc.o cap_proc.o cap_extint.o cap_flag.o cap_text.o cap_file.o
-          $RANLIB libcap.a
-          
-          cd ..
-          
-          # 安装到 sysroot
-          sudo cp libcap/libcap.a $SYSROOT_DIR/usr/lib/
-          sudo cp libcap/include/capability.h $SYSROOT_DIR/usr/include/sys/capability.h
-          sudo cp libcap/include/uapi/linux/capability.h $SYSROOT_DIR/usr/include/linux/
-          
-          # 创建 pkg-config 文件
-          echo "prefix=$SYSROOT_DIR/usr" > libcap.pc
-          echo "exec_prefix=\${prefix}" >> libcap.pc
-          echo "libdir=\${exec_prefix}/lib" >> libcap.pc
-          echo "includedir=\${prefix}/include" >> libcap.pc
-          echo "" >> libcap.pc
-          echo "Name: libcap" >> libcap.pc
-          echo "Description: Linux capabilities library" >> libcap.pc
-          echo "Version: $LIBCAP_VERSION" >> libcap.pc
-          echo "Cflags: -I\${includedir}" >> libcap.pc
-          echo "Libs: -L\${libdir} -lcap" >> libcap.pc
-          
-          sudo mkdir -p $SYSROOT_DIR/usr/lib/pkgconfig
-          sudo cp libcap.pc $SYSROOT_DIR/usr/lib/pkgconfig/
+          # 配置并构建
+          make CC="$CC" AR="$AR" RANLIB="$RANLIB" \
+              CFLAGS="$CFLAGS -I$PWD/libcap/include" \
+              LDFLAGS="$LDFLAGS" \
+              DESTDIR="$SYSROOT_DIR" \
+              lib=lib prefix=/usr \
+              install-static
           
           cd ..
           
@@ -291,12 +263,6 @@ jobs:
           tar xf "v$UDEV_VERSION.tar.gz"
           cd "systemd-$UDEV_VERSION"
           
-          # 创建必要的兼容头文件
-          sudo mkdir -p $SYSROOT_DIR/usr/include/sys
-          echo "#ifndef _SYS_CAPABILITY_H" | sudo tee $SYSROOT_DIR/usr/include/sys/capability.h
-          echo "#define _SYS_CAPABILITY_H" | sudo tee -a $SYSROOT_DIR/usr/include/sys/capability.h
-          echo "#endif" | sudo tee -a $SYSROOT_DIR/usr/include/sys/capability.h
-          
           # 配置为最小化构建
           meson setup \
             --cross-file build/meson/cross/arm64-linux-musl.txt \
@@ -323,7 +289,8 @@ jobs:
           echo "依赖库构建完成:"
           ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev}.a
           echo "头文件验证:"
-          ls -l "$SYSROOT_DIR/usr/include"/{errno.h,linux/capability.h,sys/capability.h}
+          ls -l "$SYSROOT_DIR/usr/include/sys/capability.h"
+          ls -l "$SYSROOT_DIR/usr/include/linux/capability.h"
 
       - name: Install WiX
         if: runner.os == 'Windows'
