@@ -203,7 +203,7 @@ jobs:
           
           # 修改 Makefile 以使用正确的路径
           sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" Make.Rules
-          sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADers|" libcap/Makefile
+          sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" libcap/Makefile
           
           # 只构建静态库
           make BUILD_CC="gcc" \
@@ -417,6 +417,19 @@ jobs:
           # 禁用使用parse_printf_format的代码块
           sed -i '/VA_FORMAT_ADVANCE(format, ap);/i #if !PARSE_PRINTF_FORMAT_DISABLED' src/basic/log.c
           sed -i '/VA_FORMAT_ADVANCE(format, ap);/a #endif' src/basic/log.c
+          
+          # 7. 修复rlimit-util.c中的格式问题
+          echo "修复rlimit-util.c中的格式问题..."
+          # 替换格式字符串为兼容类型
+          sed -i 's/RLIM_FMT/"%llu"/g' src/basic/rlimit-util.c
+          sed -i 's/rlim->rlim_max/(unsigned long long) rlim->rlim_max/g' src/basic/rlimit-util.c
+          sed -i 's/fixed.rlim_max/(unsigned long long) fixed.rlim_max/g' src/basic/rlimit-util.c
+          sed -i 's/rl.rlim_cur/(unsigned long long) rl.rlim_cur/g' src/basic/rlimit-util.c
+          
+          # 8. 修复socket-util.c中的NI_IDN问题
+          echo "修复socket-util.c中的NI_IDN问题..."
+          # 在文件开头添加缺失的定义
+          sed -i '1i #ifndef NI_IDN\n#define NI_IDN 0\n#endif' src/basic/socket-util.c
           
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
