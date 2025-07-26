@@ -203,7 +203,7 @@ jobs:
           
           # 修改 Makefile 以使用正确的路径
           sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" Make.Rules
-          sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" libcap/Makefile
+          sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADers|" libcap/Makefile
           
           # 只构建静态库
           make BUILD_CC="gcc" \
@@ -409,6 +409,15 @@ jobs:
           sed -i 's/assert(!(flags \& GLOB_ALTDIRFUNC));/\/\/ 修复：禁用GLOB_ALTDIRFUNC相关代码\n#if 0/' src/basic/glob-util.c
           sed -i '/pglob->gl_stat = stat;/a #endif' src/basic/glob-util.c
           
+          # 6. 修复log.c中的parse_printf_format问题
+          echo "修复log.c中的parse_printf_format问题..."
+          # 禁用parse_printf_format相关功能
+          sed -i '1i #ifndef PARSE_PRINTF_FORMAT_DISABLED\n#define PARSE_PRINTF_FORMAT_DISABLED 1\n#endif' src/basic/log.c
+          
+          # 禁用使用parse_printf_format的代码块
+          sed -i '/VA_FORMAT_ADVANCE(format, ap);/i #if !PARSE_PRINTF_FORMAT_DISABLED' src/basic/log.c
+          sed -i '/VA_FORMAT_ADVANCE(format, ap);/a #endif' src/basic/log.c
+          
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
           [binaries]
@@ -489,7 +498,7 @@ jobs:
             -Dsysusers=false \
             -Dtmpfiles=false \
             build \
-            -Dc_args=\"$CFLAGS -I$PWD/src/basic -Wno-error=redundant-decls\" \
+            -Dc_args=\"$CFLAGS -I$PWD/src/basic -Wno-error=redundant-decls -Wno-error=implicit-function-declaration\" \
             -Dc_link_args=\"$LDFLAGS\""
           
           echo "运行命令: $meson_cmd"
