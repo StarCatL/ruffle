@@ -374,35 +374,18 @@ jobs:
           tar xf "v$UDEV_VERSION.tar.gz"
           cd "systemd-$UDEV_VERSION"
           
-          # 修复：创建 printf.h 兼容文件
-          cat > src/basic/printf.h <<EOF
-          #ifndef _PRINTF_H_
-          #define _PRINTF_H_
+          # 关键修复：彻底解决头文件冲突
+          # 1. 移除冲突的prctl定义
+          sed -i 's/#include <linux\/prctl.h>//g' src/basic/missing_prctl.h
           
-          /* 为 musl 提供兼容的 printf.h 头文件 */
-          #include <stdio.h>
-          #include <stdarg.h>
+          # 2. 解决printf重定义问题
+          for file in $(grep -rl '#include "printf.h"' src); do
+            sed -i 's/#include "printf.h"//g' $file
+          done
           
-          #ifdef __cplusplus
-          extern "C" {
-          #endif
-          
-          /* 添加必要的函数声明 */
-          int printf(const char *format, ...);
-          int fprintf(FILE *stream, const char *format, ...);
-          int sprintf(char *str, const char *format, ...);
-          int snprintf(char *str, size_t size, const char *format, ...);
-          int vprintf(const char *format, va_list ap);
-          int vfprintf(FILE *stream, const char *format, va_list ap);
-          int vsprintf(char *str, const char *format, va_list ap);
-          int vsnprintf(char *str, size_t size, const char *format, va_list ap);
-          
-          #ifdef __cplusplus
-          }
-          #endif
-          
-          #endif /* _PRINTF_H_ */
-          EOF
+          # 3. 解决dirent64问题
+          sed -i 's/struct dirent64/struct dirent/g' src/basic/dirent-util.h
+          sed -i 's/dirent64/dirent/g' src/basic/dirent-util.h
           
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
@@ -420,24 +403,16 @@ jobs:
           endian = 'little'
           
           [properties]
+          # 禁用dirent64
           dirent64 = false
           EOF
-          
-          # 关键修复：强制使用宿主机Python
-          # 卸载工具链中的Python以避免干扰
-          sudo rm -f "$TOOLCHAIN_PATH/python3"
-          sudo rm -f "$TOOLCHAIN_PATH/python"
           
           # 确保使用宿主机Python
           export PATH="/usr/bin:$PATH"
           export PYTHON=/usr/bin/python3
           echo "使用Python路径: $PYTHON"
           
-          # 验证Python环境
-          which python3
-          python3 -c "import jinja2; print('jinja2 is available')"
-          
-          # 修复：移除无效的 glibc-printf 选项
+          # 修复编译参数
           meson_cmd="meson setup \
             --cross-file cross-file.txt \
             -Dprefix=\"$SYSROOT_DIR/usr\" \
@@ -492,7 +467,7 @@ jobs:
             -Dsysusers=false \
             -Dtmpfiles=false \
             build \
-            -Dc_args=\"$CFLAGS -I$PWD/src/basic -DHAVE_LINUX_PRCTL_H=1 -Dcomparison_fn_t=__compar_fn_t -Wno-error=redundant-decls\" \
+            -Dc_args=\"$CFLAGS -I$PWD/src/basic -Wno-error=redundant-decls\" \
             -Dc_link_args=\"$LDFLAGS\""
           
           echo "运行命令: $meson_cmd"
