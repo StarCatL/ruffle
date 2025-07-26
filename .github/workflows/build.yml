@@ -401,19 +401,13 @@ jobs:
           # 在 sort-util.h 中添加定义
           sed -i '1i #ifndef COMPARISON_FN_T_DEFINED\n#define COMPARISON_FN_T_DEFINED\ntypedef int (*comparison_fn_t)(const void *, const void *);\n#endif' src/basic/sort-util.h
           
-          # 5. 修复glob问题：定义缺失的宏
-          cat > src/basic/glob-fix.h <<EOF
-          #ifndef GLOB_FIX_H
-          #define GLOB_FIX_H
+          # 5. 修复glob问题：彻底禁用GLOB_ALTDIRFUNC相关代码
+          # 在文件开头添加缺失的宏定义
+          sed -i '1i #ifndef GLOB_ALTDIRFUNC\n#define GLOB_ALTDIRFUNC 0\n#endif\n#ifndef GLOB_BRACE\n#define GLOB_BRACE 0\n#endif' src/basic/glob-util.c
           
-          #define GLOB_ALTDIRFUNC 0
-          #define GLOB_BRACE 0
-          
-          #endif /* GLOB_FIX_H */
-          EOF
-          
-          # 包含这个头文件到glob-util.c
-          echo "#include \"glob-fix.h\"" >> src/basic/glob-util.c
+          # 注释掉有问题的代码块
+          sed -i 's/assert(!(flags \& GLOB_ALTDIRFUNC));/\/\/ 修复：禁用GLOB_ALTDIRFUNC相关代码\n#if 0/' src/basic/glob-util.c
+          sed -i '/pglob->gl_stat = stat;/a #endif' src/basic/glob-util.c
           
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
