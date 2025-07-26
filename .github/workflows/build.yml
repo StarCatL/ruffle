@@ -420,11 +420,16 @@ jobs:
           
           # 7. 修复rlimit-util.c中的格式问题
           echo "修复rlimit-util.c中的格式问题..."
+          # 修复赋值语句错误
+          sed -i 's/(unsigned long long) rl.rlim_cur = FD_SETSIZE;/rl.rlim_cur = FD_SETSIZE;/g' src/basic/rlimit-util.c
+          
           # 替换格式字符串为兼容类型
           sed -i 's/RLIM_FMT/"%llu"/g' src/basic/rlimit-util.c
-          sed -i 's/rlim->rlim_max/(unsigned long long) rlim->rlim_max/g' src/basic/rlimit-util.c
-          sed -i 's/fixed.rlim_max/(unsigned long long) fixed.rlim_max/g' src/basic/rlimit-util.c
-          sed -i 's/rl.rlim_cur/(unsigned long long) rl.rlim_cur/g' src/basic/rlimit-util.c
+          
+          # 在日志语句中正确转换参数类型
+          sed -i 's/, rlim->rlim_max,/, (unsigned long long) rlim->rlim_max,/g' src/basic/rlimit-util.c
+          sed -i 's/, fixed.rlim_max);/, (unsigned long long) fixed.rlim_max);/g' src/basic/rlimit-util.c
+          sed -i 's/, rl.rlim_cur);/, (unsigned long long) rl.rlim_cur);/g' src/basic/rlimit-util.c
           
           # 8. 修复socket-util.c中的NI_IDN问题
           echo "修复socket-util.c中的NI_IDN问题..."
