@@ -436,6 +436,14 @@ jobs:
           # 在文件开头添加缺失的定义
           sed -i '1i #ifndef NI_IDN\n#define NI_IDN 0\n#endif' src/basic/socket-util.c
           
+          # 9. 修复bus-error.c中的strerror_r问题
+          echo "修复bus-error.c中的strerror_r问题..."
+          # 修复bus_error_strerror函数
+          sed -i 's/x = strerror_r(error, m, k);/if (strerror_r(error, m, k) != 0) x = "Unknown error"; else x = m;/' src/libsystemd/sd-bus/bus-error.c
+          
+          # 修复_bus_error_message函数
+          sed -i 's/return strerror_r(abs(error), buf, ERRNO_BUF_LEN);/if (strerror_r(abs(error), buf, ERRNO_BUF_LEN) != 0) snprintf(buf, ERRNO_BUF_LEN, "Unknown error %d", abs(error)); return buf;/' src/libsystemd/sd-bus/bus-error.c
+          
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
           [binaries]
