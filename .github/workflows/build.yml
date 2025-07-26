@@ -379,9 +379,13 @@ jobs:
           sed -i 's/#include <linux\/prctl.h>//g' src/basic/missing_prctl.h
           
           # 2. 解决printf重定义问题
+          # 移除所有对自定义printf.h的引用
           for file in $(grep -rl '#include "printf.h"' src); do
             sed -i 's/#include "printf.h"//g' $file
           done
+          
+          # 修复stdio-util.h中的printf.h引用
+          sed -i 's|#include <printf.h>|/* Removed conflicting printf.h */|g' src/basic/stdio-util.h
           
           # 3. 解决dirent64问题
           sed -i 's/struct dirent64/struct dirent/g' src/basic/dirent-util.h
