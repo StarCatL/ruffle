@@ -418,6 +418,9 @@ jobs:
           cpu_family = 'aarch64'
           cpu = 'aarch64'
           endian = 'little'
+          
+          [properties]
+          dirent64 = false
           EOF
           
           # 关键修复：强制使用宿主机Python
@@ -489,7 +492,7 @@ jobs:
             -Dsysusers=false \
             -Dtmpfiles=false \
             build \
-            -Dc_args=\"$CFLAGS -I$PWD/src/basic\" \
+            -Dc_args=\"$CFLAGS -I$PWD/src/basic -DHAVE_LINUX_PRCTL_H=1 -Dcomparison_fn_t=__compar_fn_t -Wno-error=redundant-decls\" \
             -Dc_link_args=\"$LDFLAGS\""
           
           echo "运行命令: $meson_cmd"
