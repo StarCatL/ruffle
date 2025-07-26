@@ -192,7 +192,7 @@ jobs:
           
           # 修复：禁用共享库构建和测试
           sed -i 's/^\(BUILD_SHARED_LIB\)=yes/\1=no/' Make.Rules
-          sed极i 's/^\(BUILD_STATIC_LIB\)=no/\1=yes/' Make.Rules
+          sed -i 's/^\(BUILD_STATIC_LIB\)=no/\1=yes/' Make.Rules
           sed -i 's/^\(BUILD_TESTS\)=yes/\1=no/' Make.Rules
           sed -i 's/^\(BUILD_EXAMPLES\)=yes/\1=no/' Make.Rules
           sed -i '/^include .*gobjs.mk/d' Makefile
