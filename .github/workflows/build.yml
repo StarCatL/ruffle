@@ -217,7 +217,7 @@ jobs:
           
           # 手动安装到 sysroot
           sudo mkdir -p "$SYSROOT_DIR/usr/lib"
-          sudo cp libcap/libcap.a "$极SYSROOT_DIR/usr/lib"
+          sudo cp libcap/libcap.a "$SYSROOT_DIR/usr/lib"
           
           # 创建必要的头文件目录
           sudo mkdir -p "$SYSROOT_DIR/usr/include/sys"
@@ -394,7 +394,7 @@ jobs:
           int snprintf(char *str, size_t size, const char *format, ...);
           int vprintf(const char *format, va_list ap);
           int vfprintf(FILE *stream, const char *format, va_list ap);
-          int vsprintf(char *str, const char *format, va极_list ap);
+          int vsprintf(char *str, const char *format, va_list ap);
           int vsnprintf(char *str, size_t size, const char *format, va_list ap);
           
           #ifdef __cplusplus
