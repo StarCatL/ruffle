@@ -391,6 +391,16 @@ jobs:
           sed -i 's/struct dirent64/struct dirent/g' src/basic/dirent-util.h
           sed -i 's/dirent64/dirent/g' src/basic/dirent-util.h
           
+          # 4. 解决 comparison_fn_t 未定义问题
+          # 在 sort-util.h 中添加缺失的类型定义
+          cat >> src/basic/sort-util.h <<EOF
+          
+          #ifndef COMPARISON_FN_T_DEFINED
+          #define COMPARISON_FN_T_DEFINED
+          typedef int (*comparison_fn_t)(const void *, const void *);
+          #endif
+          EOF
+          
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
           [binaries]
