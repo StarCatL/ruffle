@@ -409,7 +409,7 @@ jobs:
           export PATH="/usr/bin:$PATH"
           export PYTHON=/usr/bin/python3
           
-          # 修复编译参数
+          # 修复编译参数 - 移除无效的选项
           meson_cmd="meson setup \
             --cross-file cross-file.txt \
             -Dprefix=\"$SYSROOT_DIR/usr\" \
@@ -463,7 +463,6 @@ jobs:
             -Dquotacheck=false \
             -Dsysusers=false \
             -Dtmpfiles=false \
-            -Dinclude-kernel-header-internal=false \
             build \
             -Dc_args=\"$CFLAGS -I$PWD/src/basic -Wno-error=redundant-decls -Wno-error=implicit-function-declaration\" \
             -Dc_link_args=\"$LDFLAGS\""
