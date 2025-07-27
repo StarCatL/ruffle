@@ -169,10 +169,7 @@ jobs:
       - name: Build dependencies for aarch64 musl
         run: |
           echo "安装构建工具..."
-          # 确保安装meson和ninja-build
           sudo apt-get install -y meson ninja-build
-          
-          # 修复：安装Python依赖
           sudo apt-get install -y python3 python3-pip
           sudo pip3 install jinja2
           
@@ -181,7 +178,6 @@ jobs:
           mkdir -p "$DEPS_DIR"
           cd "$DEPS_DIR"
           
-          # 安装其他构建工具
           sudo apt-get install -y autoconf automake libtool m4 gcc gperf pkg-config
           
           # 构建 libcap
@@ -190,7 +186,6 @@ jobs:
           tar xf "libcap-$LIBCAP_VERSION.tar.xz"
           cd "libcap-$LIBCAP_VERSION"
           
-          # 修复：禁用共享库构建和测试
           sed -i 's/^\(BUILD_SHARED_LIB\)=yes/\1=no/' Make.Rules
           sed -i 's/^\(BUILD_STATIC_LIB\)=no/\1=yes/' Make.Rules
           sed -i 's/^\(BUILD_TESTS\)=yes/\1=no/' Make.Rules
@@ -198,14 +193,11 @@ jobs:
           sed -i '/^include .*gobjs.mk/d' Makefile
           sed -i '/^include .*gperf.mk/d' Makefile
           
-          # 设置内核头文件路径到 sysroot
           export KERNEL_HEADERS="$SYSROOT_DIR/usr/include"
           
-          # 修改 Makefile 以使用正确的路径
           sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" Make.Rules
           sed -i "s|^INCLUDE_HEADERS :=.*|INCLUDE_HEADERS := $KERNEL_HEADERS|" libcap/Makefile
           
-          # 只构建静态库
           make BUILD_CC="gcc" \
                CC="$CC" \
                AR="$AR" \
@@ -215,21 +207,13 @@ jobs:
                lib=lib prefix=/usr \
                -C libcap libcap.a
           
-          # 手动安装到 sysroot
           sudo mkdir -p "$SYSROOT_DIR/usr/lib"
           sudo cp libcap/libcap.a "$SYSROOT_DIR/usr/lib"
-          
-          # 创建必要的头文件目录
           sudo mkdir -p "$SYSROOT_DIR/usr/include/sys"
           sudo mkdir -p "$SYSROOT_DIR/usr/include/linux"
-          
-          # 修复：使用正确的路径复制头文件
           sudo cp libcap/include/sys/capability.h "$SYSROOT_DIR/usr/include/sys/"
-          
-          # 修复：使用正确的uapi路径复制头文件
           sudo cp libcap/include/uapi/linux/capability.h "$SYSROOT_DIR/usr/include/linux/"
           
-          # 创建 pkg-config 文件
           echo "prefix=$SYSROOT_DIR/usr" > libcap.pc
           echo "exec_prefix=\${prefix}" >> libcap.pc
           echo "libdir=\${exec_prefix}/lib" >> libcap.pc
@@ -252,13 +236,10 @@ jobs:
           tar xf "alsa-lib-$ALSA_VERSION.tar.bz2"
           cd "alsa-lib-$ALSA_VERSION"
           
-          # 修复ALSA构建问题：添加全局缺失的宏定义
-          # 在全局头文件中定义缺失的宏
           echo "#define __STRING(x) #x" >> include/global.h
           echo "#define _dlsym_control_001 1" >> include/control.h
           echo "#define _dlsym_pcm_001 1" >> include/pcm.h
           
-          # 配置ALSA
           ./configure \
             --host=aarch64-buildroot-linux-musl \
             --prefix="$SYSROOT_DIR/usr" \
@@ -269,7 +250,6 @@ jobs:
             CFLAGS="$CFLAGS" \
             LDFLAGS="$LDFLAGS"
             
-          # 构建并安装
           make -j$(nproc)
           sudo make install
           cd ..
@@ -280,7 +260,6 @@ jobs:
           tar xf "util-linux-$UTIL_LINUX_VERSION.tar.gz"
           cd "util-linux-$UTIL_LINUX_VERSION"
           
-          # 修复：添加缺失的头文件宏
           cat > include/missing.h <<EOF
           #ifndef MISSING_H
           #define MISSING_H
@@ -292,7 +271,6 @@ jobs:
           #endif /* MISSING_H */
           EOF
           
-          # 修复：添加缺失的 isnan 实现
           cat >> include/missing.h <<EOF
           
           #ifndef isnan
@@ -300,10 +278,8 @@ jobs:
           #endif
           EOF
           
-          # 将自定义头文件包含到 config.h
           echo "#include \"missing.h\"" >> config.h.in
           
-          # 配置 util-linux
           ./configure \
             --host=aarch64-buildroot-linux-musl \
             --prefix="$SYSROOT_DIR/usr" \
@@ -325,7 +301,6 @@ jobs:
             CFLAGS="$CFLAGS -I$PWD/include" \
             LDFLAGS="$LDFLAGS"
             
-          # 构建并安装
           make -j$(nproc)
           sudo make install
           cd ..
@@ -336,7 +311,6 @@ jobs:
           tar xf "v$LZ4_VERSION.tar.gz"
           cd "lz4-$LZ4_VERSION"
           
-          # 构建静态库
           make \
             CC="$CC" \
             AR="$AR" \
@@ -345,14 +319,12 @@ jobs:
             LDFLAGS="$LDFLAGS" \
             liblz4.a
           
-          # 安装到 sysroot
           sudo mkdir -p "$SYSROOT_DIR/usr/include"
           sudo cp lib/lz4.h "$SYSROOT_DIR/usr/include"
           sudo cp lib/lz4hc.h "$SYSROOT_DIR/usr/include"
           sudo cp lib/lz4frame.h "$SYSROOT_DIR/usr/include"
           sudo cp lib/liblz4.a "$SYSROOT_DIR/usr/lib"
           
-          # 创建 pkg-config 文件
           echo "prefix=$SYSROOT_DIR/usr" > liblz4.pc
           echo "exec_prefix=\${prefix}" >> liblz4.pc
           echo "libdir=\${exec_prefix}/lib" >> liblz4.pc
@@ -374,75 +346,46 @@ jobs:
           tar xf "v$UDEV_VERSION.tar.gz"
           cd "systemd-$UDEV_VERSION"
           
-          # 关键修复：彻底解决头文件冲突
-          # 1. 移除冲突的prctl定义
+          # 关键修复：解决头文件冲突
           sed -i 's/#include <linux\/prctl.h>//g' src/basic/missing_prctl.h
           
-          # 2. 解决printf重定义问题
-          # 移除所有对自定义printf.h的引用
           for file in $(grep -rl '#include "printf.h"' src); do
             sed -i 's/#include "printf.h"//g' $file
           done
           
-          # 修复stdio-util.h中的printf.h引用
           sed -i 's|#include <printf.h>|/* Removed conflicting printf.h */|g' src/basic/stdio-util.h
           
-          # 3. 解决dirent64问题
           sed -i 's/struct dirent64/struct dirent/g' src/basic/dirent-util.h
           sed -i 's/dirent64/dirent/g' src/basic/dirent-util.h
           
-          # 4. 彻底解决 comparison_fn_t 问题
-          # 在所有包含 comparison_fn_t 的文件开头添加类型定义
-          echo "添加 comparison_fn_t 定义到所有相关文件..."
           find src -type f -name "*.c" -exec grep -lZ "comparison_fn_t" {} + | while IFS= read -r -d $'\0' file; do
             sed -i '1i typedef int (*comparison_fn_t)(const void *, const void *);' "$file"
           done
           
-          # 在 sort-util.h 中添加定义
           sed -i '1i #ifndef COMPARISON_FN_T_DEFINED\n#define COMPARISON_FN_T_DEFINED\ntypedef int (*comparison_fn_t)(const void *, const void *);\n#endif' src/basic/sort-util.h
           
-          # 5. 修复glob问题：彻底禁用GLOB_ALTDIRFUNC相关代码
-          # 在文件开头添加缺失的宏定义
           sed -i '1i #ifndef GLOB_ALTDIRFUNC\n#define GLOB_ALTDIRFUNC 0\n#endif\n#ifndef GLOB_BRACE\n#define GLOB_BRACE 0\n#endif' src/basic/glob-util.c
-          
-          # 注释掉有问题的代码块
           sed -i 's/assert(!(flags \& GLOB_ALTDIRFUNC));/\/\/ 修复：禁用GLOB_ALTDIRFUNC相关代码\n#if 0/' src/basic/glob-util.c
           sed -i '/pglob->gl_stat = stat;/a #endif' src/basic/glob-util.c
           
-          # 6. 修复log.c中的parse_printf_format问题
-          echo "修复log.c中的parse_printf_format问题..."
-          # 禁用parse_printf_format相关功能
           sed -i '1i #ifndef PARSE_PRINTF_FORMAT_DISABLED\n#define PARSE_PRINTF_FORMAT_DISABLED 1\n#endif' src/basic/log.c
-          
-          # 禁用使用parse_printf_format的代码块
           sed -i '/VA_FORMAT_ADVANCE(format, ap);/i #if !PARSE_PRINTF_FORMAT_DISABLED' src/basic/log.c
           sed -i '/VA_FORMAT_ADVANCE(format, ap);/a #endif' src/basic/log.c
           
-          # 7. 修复rlimit-util.c中的格式问题
-          echo "修复rlimit-util.c中的格式问题..."
-          # 修复赋值语句错误
           sed -i 's/(unsigned long long) rl.rlim_cur = FD_SETSIZE;/rl.rlim_cur = FD_SETSIZE;/g' src/basic/rlimit-util.c
-          
-          # 替换格式字符串为兼容类型
           sed -i 's/RLIM_FMT/"%llu"/g' src/basic/rlimit-util.c
-          
-          # 在日志语句中正确转换参数类型
           sed -i 's/, rlim->rlim_max,/, (unsigned long long) rlim->rlim_max,/g' src/basic/rlimit-util.c
           sed -i 's/, fixed.rlim_max);/, (unsigned long long) fixed.rlim_max);/g' src/basic/rlimit-util.c
           sed -i 's/, rl.rlim_cur);/, (unsigned long long) rl.rlim_cur);/g' src/basic/rlimit-util.c
           
-          # 8. 修复socket-util.c中的NI_IDN问题
-          echo "修复socket-util.c中的NI_IDN问题..."
-          # 在文件开头添加缺失的定义
           sed -i '1i #ifndef NI_IDN\n#define NI_IDN 0\n#endif' src/basic/socket-util.c
           
-          # 9. 修复bus-error.c中的strerror_r问题
-          echo "修复bus-error.c中的strerror_r问题..."
-          # 修复bus_error_strerror函数
           sed -i 's/x = strerror_r(error, m, k);/if (strerror_r(error, m, k) != 0) x = "Unknown error"; else x = m;/' src/libsystemd/sd-bus/bus-error.c
-          
-          # 修复_bus_error_message函数
           sed -i 's/return strerror_r(abs(error), buf, ERRNO_BUF_LEN);/if (strerror_r(abs(error), buf, ERRNO_BUF_LEN) != 0) snprintf(buf, ERRNO_BUF_LEN, "Unknown error %d", abs(error)); return buf;/' src/libsystemd/sd-bus/bus-error.c
+          
+          # 修复 ethhdr 重定义问题
+          sed -i 's|#include <netinet/if_ether.h>|#include <linux/if_ether.h>|g' src/libsystemd/sd-netlink/netlink-message-rtnl.c
+          sed -i 's|#include <netinet/if_ether.h>|#include <linux/if_ether.h>|g' src/libsystemd/sd-netlink/netlink-types-rtnl.c
           
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
@@ -460,14 +403,11 @@ jobs:
           endian = 'little'
           
           [properties]
-          # 禁用dirent64
           dirent64 = false
           EOF
           
-          # 确保使用宿主机Python
           export PATH="/usr/bin:$PATH"
           export PYTHON=/usr/bin/python3
-          echo "使用Python路径: $PYTHON"
           
           # 修复编译参数
           meson_cmd="meson setup \
@@ -523,30 +463,20 @@ jobs:
             -Dquotacheck=false \
             -Dsysusers=false \
             -Dtmpfiles=false \
+            -Dinclude-kernel-header-internal=false \
             build \
             -Dc_args=\"$CFLAGS -I$PWD/src/basic -Wno-error=redundant-decls -Wno-error=implicit-function-declaration\" \
             -Dc_link_args=\"$LDFLAGS\""
           
-          echo "运行命令: $meson_cmd"
           eval "$meson_cmd"
           
-          # 构建整个项目
           ninja -C build
-          
-          # 安装构建结果
           sudo ninja -C build install
           
           cd ..
           
-          # 验证安装
           echo "依赖库构建完成:"
           ls -l "$SYSROOT_DIR/usr/lib"/lib{cap,asound,udev,blkid,mount,lz4}.a
-          echo "头文件验证:"
-          ls -l "$SYSROOT_DIR/usr/include/sys/capability.h"
-          ls -l "$SYSROOT_DIR/usr/include/linux/capability.h"
-          ls -l "$SYSROOT_DIR/usr/include/blkid/blkid.h"
-          ls -l "$SYSROOT_DIR/usr/include/libmount/libmount.h"
-          ls -l "$SYSROOT_DIR/usr/include/lz4.h"
 
       - name: Cargo build
         run: |
@@ -557,7 +487,6 @@ jobs:
             --features "${{ matrix.FEATURES }}"
         env:
           CFG_RELEASE_CHANNEL: nightly
-          # 添加必要的静态链接参数
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C link-arg=-lcap -C link-arg=-ludev -C link-arg=-lasound -C link-arg=-lblkid -C link-arg=-lmount -C link-arg=-llz4"
 
       - name: Verify static linking
@@ -565,16 +494,13 @@ jobs:
           BINARY="${{ env.CARGO_BUILD_DIR }}/ruffle_desktop"
           echo "验证静态链接: $BINARY"
           
-          # 检查文件类型
           file "$BINARY"
           
-          # 检查动态依赖
           if readelf -d "$BINARY" | grep NEEDED; then
             echo "错误: 检测到动态依赖!"
             exit 1
           fi
           
-          # 检查静态链接
           if ldd "$BINARY" 2>&1 | grep -q "not a dynamic executable"; then
             echo "验证通过: 完全静态链接的可执行文件"
           else
