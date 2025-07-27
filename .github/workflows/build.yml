@@ -403,9 +403,14 @@ jobs:
           # 3. 将 IF_NAMESIZE 替换为 IFNAMSIZ
           find src -type f -exec sed -i 's/IF_NAMESIZE/IFNAMSIZ/g' {} +
           
-          # 4. 添加 struct in6_addr 定义
-          echo "添加 struct in6_addr 定义..."
+          # 4. 修复 in6_addr 重定义问题
+          echo "修复 in6_addr 重定义问题..."
+          # 移除现有的 struct in6_addr 定义
+          sed -i '/struct in6_addr {/,/};/d' src/basic/missing.h
+          
+          # 添加条件编译保护
           cat >> src/basic/missing.h <<EOF
+          #include <stdint.h>
           #ifndef _IN6_ADDR_DEFINED
           #define _IN6_ADDR_DEFINED
           struct in6_addr {
@@ -420,6 +425,8 @@ jobs:
           
           # 5. 在需要的地方包含 netinet/in.h
           sed -i '1i #include <netinet/in.h>' src/basic/arphrd-util.c
+          sed -i '1i #include <netinet/in.h>' src/basic/async.c
+          sed -i '1i #include <netinet/in.h>' src/basic/audit-util.c
           
           # 6. 禁用所有警告作为错误
           sed -i 's/-Werror//g' meson.build
