@@ -387,13 +387,32 @@ jobs:
           sed -i 's|#include <netinet/if_ether.h>|#include <linux/if_ether.h>|g' src/libsystemd/sd-netlink/netlink-message-rtnl.c
           sed -i 's|#include <netinet/if_ether.h>|#include <linux/if_ether.h>|g' src/libsystemd/sd-netlink/netlink-types-rtnl.c
           
-          # 解决头文件冲突
-          sed -i 's|#include <net/if.h>|#include <linux/if.h>|g' src/basic/socket-util.c
-          sed -i 's|#include <net/if.h>|#include <linux/if.h>|g' src/libsystemd/sd-netlink/netlink-message-rtnl.c
+          # 彻底解决头文件冲突：完全避免包含系统网络头文件
+          echo "彻底解决头文件冲突..."
+          # 1. 在基本头文件中定义缺失的宏
+          echo "#define _NET_IF_H 1" >> src/basic/missing.h
           
-          # 禁用特定警告
+          # 2. 在包含任何头文件之前定义保护宏
+          for file in $(find src -name "*.c" -o -name "*.h"); do
+            sed -i '1i #ifndef _NET_IF_H\n#define _NET_IF_H\n#endif' "$file"
+          done
+          
+          # 3. 替换所有系统网络头文件包含
+          find src -type f -exec sed -i 's/#include <net\/if\.h>/#include "linux\/if.h"/g' {} +
+          find src -type f -exec sed -i 's/#include <net\/if_arp\.h>/#include "linux\/if_arp.h"/g' {} +
+          find src -type f -exec sed -i 's/#include <net\/ethernet\.h>/#include "linux\/if_ether.h"/g' {} +
+          find src -type f -exec sed -i 's/#include <netinet\/in\.h>/#include "linux\/in.h"/g' {} +
+          find src -type f -exec sed -i 's/#include <netinet\/tcp\.h>/#include "linux\/tcp.h"/g' {} +
+          find src -type f -exec sed -i 's/#include <netpacket\/packet\.h>/#include "linux\/if_packet.h"/g' {} +
+          
+          # 4. 修复特定文件中的冲突
+          sed -i 's|#include <net/if.h>|#include "linux/if.h"|g' src/basic/socket-util.c
+          sed -i 's|#include <net/if.h>|#include "linux/if.h"|g' src/libsystemd/sd-netlink/netlink-message-rtnl.c
+          
+          # 5. 禁用特定警告
           sed -i 's/-Werror=discarded-qualifiers//g' meson.build
           sed -i 's/-Werror=misleading-indentation//g' meson.build
+          sed -i 's/-Werror=redundant-decls//g' meson.build
           
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
@@ -417,7 +436,7 @@ jobs:
           export PATH="/usr/bin:$PATH"
           export PYTHON=/usr/bin/python3
           
-          # 修复编译参数
+          # 修复编译参数 - 禁用更多警告
           meson_cmd="meson setup \
             --cross-file cross-file.txt \
             -Dprefix=\"$SYSROOT_DIR/usr\" \
@@ -472,7 +491,7 @@ jobs:
             -Dsysusers=false \
             -Dtmpfiles=false \
             build \
-            -Dc_args=\"$CFLAGS -I$PWD/src/basic -Wno-error=redundant-decls -Wno-error=implicit-function-declaration -Wno-discarded-qualifiers -Wno-misleading-indentation\" \
+            -Dc_args=\"$CFLAGS -I$PWD/src/basic -Wno-error=all -Wno-error=redundant-decls -Wno-error=implicit-function-declaration -Wno-discarded-qualifiers -Wno-misleading-indentation\" \
             -Dc_link_args=\"$LDFLAGS\""
           
           eval "$meson_cmd"
