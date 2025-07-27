@@ -387,6 +387,14 @@ jobs:
           sed -i 's|#include <netinet/if_ether.h>|#include <linux/if_ether.h>|g' src/libsystemd/sd-netlink/netlink-message-rtnl.c
           sed -i 's|#include <netinet/if_ether.h>|#include <linux/if_ether.h>|g' src/libsystemd/sd-netlink/netlink-types-rtnl.c
           
+          # 解决头文件冲突
+          sed -i 's|#include <net/if.h>|#include <linux/if.h>|g' src/basic/socket-util.c
+          sed -i 's|#include <net/if.h>|#include <linux/if.h>|g' src/libsystemd/sd-netlink/netlink-message-rtnl.c
+          
+          # 禁用特定警告
+          sed -i 's/-Werror=discarded-qualifiers//g' meson.build
+          sed -i 's/-Werror=misleading-indentation//g' meson.build
+          
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
           [binaries]
@@ -409,7 +417,7 @@ jobs:
           export PATH="/usr/bin:$PATH"
           export PYTHON=/usr/bin/python3
           
-          # 修复编译参数 - 移除无效的选项
+          # 修复编译参数
           meson_cmd="meson setup \
             --cross-file cross-file.txt \
             -Dprefix=\"$SYSROOT_DIR/usr\" \
@@ -464,12 +472,13 @@ jobs:
             -Dsysusers=false \
             -Dtmpfiles=false \
             build \
-            -Dc_args=\"$CFLAGS -I$PWD/src/basic -Wno-error=redundant-decls -Wno-error=implicit-function-declaration\" \
+            -Dc_args=\"$CFLAGS -I$PWD/src/basic -Wno-error=redundant-decls -Wno-error=implicit-function-declaration -Wno-discarded-qualifiers -Wno-misleading-indentation\" \
             -Dc_link_args=\"$LDFLAGS\""
           
           eval "$meson_cmd"
           
-          ninja -C build
+          # 增加构建并行度
+          ninja -C build -j $(nproc)
           sudo ninja -C build install
           
           cd ..
