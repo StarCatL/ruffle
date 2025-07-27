@@ -383,24 +383,17 @@ jobs:
           sed -i 's/x = strerror_r(error, m, k);/if (strerror_r(error, m, k) != 0) x = "Unknown error"; else x = m;/' src/libsystemd/sd-bus/bus-error.c
           sed -i 's/return strerror_r(abs(error), buf, ERRNO_BUF_LEN);/if (strerror_r(abs(error), buf, ERRNO_BUF_LEN) != 0) snprintf(buf, ERRNO_BUF_LEN, "Unknown error %d", abs(error)); return buf;/' src/libsystemd/sd-bus/bus-error.c
           
-          # 彻底解决 ethhdr 重定义问题
-          echo "彻底解决 ethhdr 重定义问题..."
-          # 1. 移除系统头文件包含
-          sed -i 's|#include <net/ethernet.h>|/* Removed to avoid conflict with linux/if_ether.h */|g' src/systemd/sd-netlink.h
+          # 修复 ETH_ALEN 未定义问题
+          echo "修复 ETH_ALEN 未定义问题..."
+          # 1. 在 arphrd-util.c 中包含必要的头文件
+          sed -i '1i #include <linux/if_ether.h>' src/basic/arphrd-util.c
           
-          # 2. 在 linux/if_ether.h 中添加保护宏
-          echo "在 linux/if_ether.h 中添加保护宏..."
+          # 2. 确保 if_ether.h 被正确包含
           sed -i '1i #ifndef _LINUX_IF_ETHER_H' src/basic/linux/if_ether.h
           sed -i '1i #define _LINUX_IF_ETHER_H' src/basic/linux/if_ether.h
           sed -i '$a #endif' src/basic/linux/if_ether.h
           
-          # 3. 在 linux/if_bridge.h 中修复包含顺序
-          sed -i 's|#include "if_ether.h"|#include "if_ether.h" // Include modified version|g' src/basic/linux/if_bridge.h
-          
-          # 4. 在相关文件中包含 linux/if_ether.h
-          sed -i '1i #include "linux/if_ether.h"' src/libsystemd/sd-netlink/netlink-message-rtnl.c
-          
-          # 5. 修复 IF_NAMESIZE 问题
+          # 3. 解决 IF_NAMESIZE 问题
           echo "解决 IF_NAMESIZE 问题..."
           # 在缺失头文件的地方定义 IFNAMSIZ
           echo "#ifndef IFNAMSIZ" >> src/basic/missing.h
@@ -408,7 +401,6 @@ jobs:
           echo "#endif" >> src/basic/missing.h
           
           # 在相关文件中包含 missing.h
-          sed -i '1i #include "missing.h"' src/basic/arphrd-util.c
           sed -i '1i #include "missing.h"' src/basic/format-util.h
           sed -i '1i #include "missing.h"' src/basic/async.c
           sed -i '1i #include "missing.h"' src/basic/audit-util.c
@@ -416,22 +408,22 @@ jobs:
           # 将 IF_NAMESIZE 替换为 IFNAMSIZ
           find src -type f -exec sed -i 's/IF_NAMESIZE/IFNAMSIZ/g' {} +
           
-          # 6. 修复 in6_addr 重定义问题
+          # 4. 修复 in6_addr 重定义问题
           sed -i '/struct in6_addr {/,/};/d' src/basic/missing.h
           sed -i '/#ifndef _IN6_ADDR_DEFINED/,/#endif/d' src/basic/missing.h
           
-          # 7. 在需要的地方包含 netinet/in.h
+          # 5. 在需要的地方包含 netinet/in.h
           sed -i '1i #include <netinet/in.h>' src/basic/arphrd-util.c
           sed -i '1i #include <netinet/in.h>' src/basic/async.c
           sed -i '1i #include <netinet/in.h>' src/basic/audit-util.c
           
-          # 8. 确保包含顺序正确
+          # 6. 确保包含顺序正确
           sed -i '1i #include <stdint.h>' src/basic/missing.h
           
-          # 9. 禁用所有警告作为错误
+          # 7. 禁用所有警告作为错误
           sed -i 's/-Werror//g' meson.build
           
-          # 10. 添加编译参数 - 忽略特定警告
+          # 8. 添加编译参数 - 忽略特定警告
           echo "添加编译参数以忽略重定义警告..."
           sed -i 's/-Wstrict-aliasing=2/-Wstrict-aliasing=2 -Wno-redundant-decls -Wno-error=redundant-decls/g' meson.build
           
