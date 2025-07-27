@@ -384,6 +384,7 @@ jobs:
           sed -i 's/return strerror_r(abs(error), buf, ERRNO_BUF_LEN);/if (strerror_r(abs(error), buf, ERRNO_BUF_LEN) != 0) snprintf(buf, ERRNO_BUF_LEN, "Unknown error %d", abs(error)); return buf;/' src/libsystemd/sd-bus/bus-error.c
           
           # 修复 ethhdr 重定义问题
+          echo "修复 ethhdr 重定义问题..."
           sed -i 's|#include <netinet/if_ether.h>|#include <linux/if_ether.h>|g' src/libsystemd/sd-netlink/netlink-message-rtnl.c
           sed -i 's|#include <netinet/if_ether.h>|#include <linux/if_ether.h>|g' src/libsystemd/sd-netlink/netlink-types-rtnl.c
           
