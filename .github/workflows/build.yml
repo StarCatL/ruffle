@@ -413,6 +413,22 @@ jobs:
           echo "修复 comparison_fn_t 问题..."
           sed -i '1i #ifndef COMPARISON_FN_T_DEFINED\n#define COMPARISON_FN_T_DEFINED\ntypedef int (*comparison_fn_t)(const void *, const void *);\n#endif' src/basic/sort-util.h
           
+          # 关键修复：修复 glob-util.c 问题
+          echo "修复 glob-util.c 问题..."
+          # 禁用 GLOB_ALTDIRFUNC 相关代码
+          sed -i 's/assert(!(flags \& GLOB_ALTDIRFUNC));/\/\/ 修复：禁用GLOB_ALTDIRFUNC相关代码\n#if 0/' src/basic/glob-util.c
+          sed -i '/pglob->gl_stat = stat;/a #endif' src/basic/glob-util.c
+          
+          # 替换 GLOB_BRACE 为 0
+          sed -i 's/GLOB_BRACE/0/g' src/basic/glob-util.c
+          
+          # 修复 glob_t 结构体成员访问问题
+          sed -i 's/pglob->gl_closedir = closedir_wrapper;/\/\/ 修复：禁用gl_closedir设置/' src/basic/glob-util.c
+          sed -i 's/pglob->gl_readdir = (struct dirent \*(\(\*\)(void \*)) readdir_no_dot;/\/\/ 修复：禁用gl_readdir设置/' src/basic/glob-util.c
+          sed -i 's/pglob->gl_opendir = (void \*(\(\*\)(const char \*)) opendir;/\/\/ 修复：禁用gl_opendir设置/' src/basic/glob-util.c
+          sed -i 's/pglob->gl_lstat = lstat;/\/\/ 修复：禁用gl_lstat设置/' src/basic/glob-util.c
+          sed -i 's/pglob->gl_stat = stat;/\/\/ 修复：禁用gl_stat设置/' src/basic/glob-util.c
+          
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
           [binaries]
@@ -490,7 +506,7 @@ jobs:
             -Dsysusers=false \
             -Dtmpfiles=false \
             build \
-            -Dc_args=\"$CFLAGS -I$PWD/src/basic -w\" \
+            -Dc_args=\"$CFLAGS -I$PWD/src/basic -w -D__MUSL__\" \
             -Dc_link_args=\"$LDFLAGS\""
           
           eval "$meson_cmd"
