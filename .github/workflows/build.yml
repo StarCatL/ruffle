@@ -395,6 +395,24 @@ jobs:
           echo "添加编译参数以忽略重定义警告..."
           sed -i 's/-Wstrict-aliasing=2/-Wstrict-aliasing=2 -Wno-redundant-decls -Wno-error=redundant-decls/g' meson.build
           
+          # 关键修复：删除 dirent64 相关断言 (musl 环境中不存在)
+          echo "修复 dirent-util.h 中的断言问题..."
+          sed -i '/assert_cc(sizeof(struct dirent) == sizeof(struct dirent64));/d' src/basic/dirent-util.h
+          sed -i '/assert_cc(offsetof(struct dirent, d_ino) == offsetof(struct dirent64, d_ino));/d' src/basic/dirent-util.h
+          sed -i '/assert_cc(sizeof_field(struct dirent, d_ino) == sizeof_field(struct dirent64, d_ino));/d' src/basic/dirent-util.h
+          sed -i '/assert_cc(offsetof(struct dirent, d_off) == offsetof(struct dirent64, d_off));/d' src/basic/dirent-util.h
+          sed -i '/assert_cc(sizeof_field(struct dirent, d_off) == sizeof_field(struct dirent64, d_off));/d' src/basic/dirent-util.h
+          sed -i '/assert_cc(offsetof(struct dirent, d_reclen) == offsetof(struct dirent64, d_reclen));/d' src/basic/dirent-util.h
+          sed -i '/assert_cc(sizeof_field(struct dirent, d_reclen) == sizeof_field(struct dirent64, d_reclen));/d' src/basic/dirent-util.h
+          sed -i '/assert_cc(offsetof(struct dirent, d_type) == offsetof(struct dirent64, d_type));/d' src/basic/dirent-util.h
+          sed -i '/assert_cc(sizeof_field(struct dirent, d_type) == sizeof_field(struct dirent64, d_type));/d' src/basic/dirent-util.h
+          sed -i '/assert_cc(offsetof(struct dirent, d_name) == offsetof(struct dirent64, d_name));/d' src/basic/dirent-util.h
+          sed -i '/assert_cc(sizeof_field(struct dirent, d_name) == sizeof_field(struct dirent64, d_name));/d' src/basic/dirent-util.h
+          
+          # 关键修复：定义 comparison_fn_t 类型
+          echo "修复 comparison_fn_t 问题..."
+          sed -i '1i #ifndef COMPARISON_FN_T_DEFINED\n#define COMPARISON_FN_T_DEFINED\ntypedef int (*comparison_fn_t)(const void *, const void *);\n#endif' src/basic/sort-util.h
+          
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
           [binaries]
