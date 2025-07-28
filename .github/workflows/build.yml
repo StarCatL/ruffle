@@ -346,55 +346,52 @@ jobs:
           tar xf "v$UDEV_VERSION.tar.gz"
           cd "systemd-$UDEV_VERSION"
           
-          # 关键修复：解决头文件冲突
-          sed -i 's/#include <linux\/prctl.h>//g' src/basic/missing_prctl.h
+          # 关键修复：确保目录存在
+          mkdir -p src/basic
+          touch src/basic/missing.h
           
-          for file in $(grep -rl '#include "printf.h"' src); do
+          # 关键修复：解决头文件冲突
+          sed -i 's/#include <linux\/prctl.h>//g' src/basic/missing_prctl.h || true
+          
+          # 关键修复：跳过不存在的文件
+          for file in $(grep -rl '#include "printf.h"' src 2>/dev/null); do
             sed -i 's/#include "printf.h"//g' $file
           done
           
-          sed -i 's|#include <printf.h>|/* Removed conflicting printf.h */|g' src/basic/stdio-util.h
+          # 关键修复：避免重定义问题
+          sed -i 's|#include <printf.h>|/* Removed conflicting printf.h */|g' src/basic/stdio-util.h || true
           
-          sed -i 's/struct dirent64/struct dirent/g' src/basic/dirent-util.h
-          sed -i 's/dirent64/dirent/g' src/basic/dirent-util.h
-          
-          find src -type f -name "*.c" -exec grep -lZ "comparison_fn_t" {} + | while IFS= read -r -d $'\0' file; do
-            sed -i '1i typedef int (*comparison_fn_t)(const void *, const void *);' "$file"
-          done
-          
-          sed -i '1i #ifndef COMPARISON_FN_T_DEFINED\n#define COMPARISON_FN_T_DEFINED\ntypedef int (*comparison_fn_t)(const void *, const void *);\n#endif' src/basic/sort-util.h
-          
-          sed -i '1i #ifndef GLOB_ALTDIRFUNC\n#define GLOB_ALTDIRFUNC 0\n#endif\n#ifndef GLOB_BRACE\n#define GLOB_BRACE 0\n#endif' src/basic/glob-util.c
-          sed -i 's/assert(!(flags \& GLOB_ALTDIRFUNC));/\/\/ 修复：禁用GLOB_ALTDIRFUNC相关代码\n#if 0/' src/basic/glob-util.c
-          sed -i '/pglob->gl_stat = stat;/a #endif' src/basic/glob-util.c
-          
-          sed -i '1i #ifndef PARSE_PRINTF_FORMAT_DISABLED\n#define PARSE_PRINTF_FORMAT_DISABLED 1\n#endif' src/basic/log.c
-          sed -i '/VA_FORMAT_ADVANCE(format, ap);/i #if !PARSE_PRINTF_FORMAT_DISABLED' src/basic/log.c
-          sed -i '/VA_FORMAT_ADVANCE(format, ap);/a #endif' src/basic/log.c
-          
+          # 关键修复：类型转换
           sed -i 's/(unsigned long long) rl.rlim_cur = FD_SETSIZE;/rl.rlim_cur = FD_SETSIZE;/g' src/basic/rlimit-util.c
           sed -i 's/RLIM_FMT/"%llu"/g' src/basic/rlimit-util.c
           sed -i 's/, rlim->rlim_max,/, (unsigned long long) rlim->rlim_max,/g' src/basic/rlimit-util.c
           sed -i 's/, fixed.rlim_max);/, (unsigned long long) fixed.rlim_max);/g' src/basic/rlimit-util.c
           sed -i 's/, rl.rlim_cur);/, (unsigned long long) rl.rlim_cur);/g' src/basic/rlimit-util.c
           
+          # 关键修复：添加缺失的定义
           sed -i '1i #ifndef NI_IDN\n#define NI_IDN 0\n#endif' src/basic/socket-util.c
           
+          # 关键修复：strerror_r 处理
           sed -i 's/x = strerror_r(error, m, k);/if (strerror_r(error, m, k) != 0) x = "Unknown error"; else x = m;/' src/libsystemd/sd-bus/bus-error.c
           sed -i 's/return strerror_r(abs(error), buf, ERRNO_BUF_LEN);/if (strerror_r(abs(error), buf, ERRNO_BUF_LEN) != 0) snprintf(buf, ERRNO_BUF_LEN, "Unknown error %d", abs(error)); return buf;/' src/libsystemd/sd-bus/bus-error.c
           
-          # 修复 ETH_ALEN 未定义问题
-          sed -i '1i #include <linux/if_ether.h>' src/basic/arphrd-util.c
-          sed -i '/#include <linux\/if_ether.h>/a #ifndef ETH_ALEN\n#define ETH_ALEN 6\n#endif' src/basic/arphrd-util.c
+          # 关键修复：修复 ETH_ALEN 未定义问题
+          cat > src/basic/missing.h <<EOF
+          #ifndef MISSING_H
+          #define MISSING_H
           
-          # 修复 in6_addr 重定义问题
-          sed -i '/struct in6_addr {/,/};/d' src/basic/missing.h
-          sed -i '/#ifndef _IN6_ADDR_DEFINED/,/#endif/d' src/basic/missing.h
+          #include <linux/if_ether.h>
+          #ifndef ETH_ALEN
+          #define ETH_ALEN 6
+          #endif
           
-          # 禁用所有警告作为错误
+          #endif /* MISSING_H */
+          EOF
+          
+          # 关键修复：禁用所有警告作为错误
           sed -i 's/-Werror//g' meson.build
           
-          # 添加编译参数 - 忽略特定警告
+          # 关键修复：添加编译参数 - 忽略特定警告
           echo "添加编译参数以忽略重定义警告..."
           sed -i 's/-Wstrict-aliasing=2/-Wstrict-aliasing=2 -Wno-redundant-decls -Wno-error=redundant-decls/g' meson.build
           
