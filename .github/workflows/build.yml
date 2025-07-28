@@ -413,21 +413,77 @@ jobs:
           echo "修复 comparison_fn_t 问题..."
           sed -i '1i #ifndef COMPARISON_FN_T_DEFINED\n#define COMPARISON_FN_T_DEFINED\ntypedef int (*comparison_fn_t)(const void *, const void *);\n#endif' src/basic/sort-util.h
           
-          # 关键修复：修复 glob-util.c 问题
-          echo "修复 glob-util.c 问题..."
-          # 禁用 GLOB_ALTDIRFUNC 相关代码
-          sed -i 's/assert(!(flags \& GLOB_ALTDIRFUNC));/\/\/ 修复：禁用GLOB_ALTDIRFUNC相关代码\n#if 0/' src/basic/glob-util.c
-          sed -i '/pglob->gl_stat = stat;/a #endif' src/basic/glob-util.c
+          # 关键修复：完全重写 glob-util.c 以兼容 musl
+          echo "完全重写 glob-util.c 以兼容 musl..."
+          cat > src/basic/glob-util.c.patch <<'EOF'
+          --- a/src/basic/glob-util.c
+          +++ b/src/basic/glob-util.c
+          @@ -20,46 +20,10 @@
+               int k;
+           
+               /* We don't want to glob through glibc, because we use this call only for supporting globbing for very few
+          -     * cases, and only our own code. Also, the glibc implementation is not thread safe except when you use
+          -     * the very latest glibc. We want to use our own implementation for that reason, but we set the same
+          -     * flags as glibc for GLOB_ALTDIRFUNC for compatibility. */
+          -
+          -    assert(!(flags & GLOB_ALTDIRFUNC));
+          -    
+          -    if (!pglob->gl_closedir)
+          -        pglob->gl_closedir = closedir_wrapper;
+          -    if (!pglob->gl_readdir)
+          -        pglob->gl_readdir = (struct dirent *(*)(void *)) readdir_no_dot;
+          -    if (!pglob->gl_opendir)
+          -        pglob->gl_opendir = (void *(*)(const char *)) opendir;
+          -    if (!pglob->gl_lstat)
+          -        pglob->gl_lstat = lstat;
+          -    if (!pglob->gl_stat)
+          -        pglob->gl_stat = stat;
+          +     * cases, and only our own code. This simplified version works on musl without GLOB_ALTDIRFUNC. */
+           
+          -    k = glob(path, flags | GLOB_ALTDIRFUNC, NULL, pglob);
+          -    if (k == GLOB_NOMATCH)
+          -        return -ENOENT;
+          -    if (k != 0)
+          -        return -errno;
+          -
+          -    return 0;
+          -}
+          -
+          -int glob_first(char **ret, const char *path) {
+          -    _cleanup_globfree_ glob_t g = {};
+          -    int k;
+          -
+          -    k = safe_glob(path, GLOB_NOSORT|GLOB_BRACE, &g);
+          -    if (k < 0)
+          -        return k;
+          -
+          -    if (g.gl_pathc == 0)
+          -        return -ENOENT;
+          -
+          -    *ret = strdup(g.gl_pathv[0]);
+          -    if (!*ret)
+          -        return -ENOMEM;
+          -
+          -    return 0;
+          +    // 直接使用标准 glob 函数，忽略 GLOB_ALTDIRFUNC
+          +    return glob(path, flags, NULL, pglob) == 0 ? 0 : -errno;
+           }
+           
+           int glob_extend(char ***strv, const char *path) {
+          @@ -68,8 +32,8 @@
+               int k;
+               char **p;
+           
+          -    k = safe_glob(path, GLOB_NOSORT|GLOB_BRACE|flags, &g);
+          -    if (k < 0)
+          +    k = glob(path, GLOB_NOSORT|flags, NULL, &g);
+          +    if (k != 0)
+                   return k;
+           
+               STRV_FOREACH(p, g.gl_pathv) {
+          EOF
           
-          # 替换 GLOB_BRACE 为 0
-          sed -i 's/GLOB_BRACE/0/g' src/basic/glob-util.c
-          
-          # 修复 glob_t 结构体成员访问问题
-          sed -i 's/pglob->gl_closedir = closedir_wrapper;/\/\/ 修复：禁用gl_closedir设置/' src/basic/glob-util.c
-          sed -i 's/pglob->gl_readdir = (struct dirent \*(\(\*\)(void \*)) readdir_no_dot;/\/\/ 修复：禁用gl_readdir设置/' src/basic/glob-util.c
-          sed -i 's/pglob->gl_opendir = (void \*(\(\*\)(const char \*)) opendir;/\/\/ 修复：禁用gl_opendir设置/' src/basic/glob-util.c
-          sed -i 's/pglob->gl_lstat = lstat;/\/\/ 修复：禁用gl_lstat设置/' src/basic/glob-util.c
-          sed -i 's/pglob->gl_stat = stat;/\/\/ 修复：禁用gl_stat设置/' src/basic/glob-util.c
+          patch -p1 < src/basic/glob-util.c.patch
           
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
