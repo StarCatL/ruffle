@@ -413,77 +413,45 @@ jobs:
           echo "修复 comparison_fn_t 问题..."
           sed -i '1i #ifndef COMPARISON_FN_T_DEFINED\n#define COMPARISON_FN_T_DEFINED\ntypedef int (*comparison_fn_t)(const void *, const void *);\n#endif' src/basic/sort-util.h
           
-          # 关键修复：完全重写 glob-util.c 以兼容 musl
+          # 修复 glob-util.c 问题：完全重写文件
           echo "完全重写 glob-util.c 以兼容 musl..."
-          cat > src/basic/glob-util.c.patch <<'EOF'
-          --- a/src/basic/glob-util.c
-          +++ b/src/basic/glob-util.c
-          @@ -20,46 +20,10 @@
-               int k;
-           
-               /* We don't want to glob through glibc, because we use this call only for supporting globbing for very few
-          -     * cases, and only our own code. Also, the glibc implementation is not thread safe except when you use
-          -     * the very latest glibc. We want to use our own implementation for that reason, but we set the same
-          -     * flags as glibc for GLOB_ALTDIRFUNC for compatibility. */
-          -
-          -    assert(!(flags & GLOB_ALTDIRFUNC));
-          -    
-          -    if (!pglob->gl_closedir)
-          -        pglob->gl_closedir = closedir_wrapper;
-          -    if (!pglob->gl_readdir)
-          -        pglob->gl_readdir = (struct dirent *(*)(void *)) readdir_no_dot;
-          -    if (!pglob->gl_opendir)
-          -        pglob->gl_opendir = (void *(*)(const char *)) opendir;
-          -    if (!pglob->gl_lstat)
-          -        pglob->gl_lstat = lstat;
-          -    if (!pglob->gl_stat)
-          -        pglob->gl_stat = stat;
-          +     * cases, and only our own code. This simplified version works on musl without GLOB_ALTDIRFUNC. */
-           
-          -    k = glob(path, flags | GLOB_ALTDIRFUNC, NULL, pglob);
-          -    if (k == GLOB_NOMATCH)
-          -        return -ENOENT;
-          -    if (k != 0)
-          -        return -errno;
-          -
-          -    return 0;
-          -}
-          -
-          -int glob_first(char **ret, const char *path) {
-          -    _cleanup_globfree_ glob_t g = {};
-          -    int k;
-          -
-          -    k = safe_glob(path, GLOB_NOSORT|GLOB_BRACE, &g);
-          -    if (k < 0)
-          -        return k;
-          -
-          -    if (g.gl_pathc == 0)
-          -        return -ENOENT;
-          -
-          -    *ret = strdup(g.gl_pathv[0]);
-          -    if (!*ret)
-          -        return -ENOMEM;
-          -
-          -    return 0;
-          +    // 直接使用标准 glob 函数，忽略 GLOB_ALTDIRFUNC
-          +    return glob(path, flags, NULL, pglob) == 0 ? 0 : -errno;
-           }
-           
-           int glob_extend(char ***strv, const char *path) {
-          @@ -68,8 +32,8 @@
-               int k;
-               char **p;
-           
-          -    k = safe_glob(path, GLOB_NOSORT|GLOB_BRACE|flags, &g);
-          -    if (k < 0)
-          +    k = glob(path, GLOB_NOSORT|flags, NULL, &g);
-          +    if (k != 0)
-                   return k;
-           
-               STRV_FOREACH(p, g.gl_pathv) {
-          EOF
+          cat > src/basic/glob-util.c <<'EOF'
+          #include "glob-util.h"
+          #include "strv.h"
+          #include <glob.h>
+          #include <errno.h>
           
-          patch -p1 < src/basic/glob-util.c.patch
+          int safe_glob(const char *path, int flags, glob_t *pglob) {
+                  int k;
+          
+                  k = glob(path, flags, NULL, pglob);
+                  if (k != 0) {
+                          if (k == GLOB_NOMATCH)
+                                  return -ENOENT;
+                          return -errno;
+                  }
+          
+                  return 0;
+          }
+          
+          int glob_extend(char ***strv, const char *path) {
+                  _cleanup_globfree_ glob_t g = {};
+                  int k;
+                  char **p;
+          
+                  k = safe_glob(path, GLOB_NOSORT, &g);
+                  if (k < 0)
+                          return k;
+          
+                  STRV_FOREACH(p, g.gl_pathv) {
+                          k = strv_extend(strv, *p);
+                          if (k < 0)
+                                  return k;
+                  }
+          
+                  return 0;
+          }
+          EOF
           
           # 创建交叉编译配置文件
           cat > cross-file.txt <<EOF
