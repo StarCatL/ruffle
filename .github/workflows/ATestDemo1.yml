@@ -1,4 +1,4 @@
-name: ATestDemo1
+name: Release Nightly
 
 on:
   schedule:
@@ -188,12 +188,15 @@ jobs:
           if [[ "${{ matrix.build_name }}" == "linux-s905l3a-musl" ]]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld
             export RUSTFLAGS="${{ matrix.RUSTFLAGS }} -C target-feature=+crt-static"
+            cargo build --locked --package ruffle_desktop --release \
+              ${{matrix.DESKTOP_FEATURES && '--features' }} ${{matrix.DESKTOP_FEATURES}} \
+              --target ${{ matrix.target }} \
+              --config "target.{{ matrix.target }}.linker=rust-lld"
+          else
+            cargo build --locked --package ruffle_desktop --release \
+              ${{matrix.DESKTOP_FEATURES && '--features' }} ${{matrix.DESKTOP_FEATURES}} \
+              ${{ matrix.target && '--target' }} ${{ matrix.target }}
           fi
-          
-          cargo build --locked --package ruffle_desktop --release \
-            ${{matrix.DESKTOP_FEATURES && '--features' }} ${{matrix.DESKTOP_FEATURES}} \
-            ${{ matrix.target && '--target' }} ${{ matrix.target }} \
-            ${{ matrix.build_name == 'linux-s905l3a-musl' && '--config=target."'${{ matrix.target }}'".linker=\"rust-lld\"' }}
         env:
           CFG_RELEASE_CHANNEL: nightly
           RUSTFLAGS: ${{ matrix.RUSTFLAGS }}
