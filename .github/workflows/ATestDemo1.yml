@@ -1,8 +1,11 @@
-name: Release Nightly
+name: A Release Ruffle ee4.7Test
 
 on:
+  # Run nightly
   schedule:
     - cron: "0 0 * * *"
+
+  # Allow for manual dispatch on GitHub
   workflow_dispatch:
 
 env:
@@ -11,7 +14,7 @@ env:
 jobs:
   create-nightly-release:
     name: Create Nightly Release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     outputs:
       is_active: ${{ steps.activity.outputs.is_active }}
       date: ${{ steps.current_time_underscores.outputs.formattedTime }}
@@ -20,6 +23,7 @@ jobs:
       tag_name: ${{ steps.create_release.outputs.tag_name }}
       version4: ${{ steps.version.outputs.version4 }}
 
+    # Only run the scheduled workflows on the main repo.
     if: github.repository == 'ruffle-rs/ruffle' || github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch'
 
     steps:
@@ -28,6 +32,7 @@ jobs:
       - name: Check for repo activity
         id: activity
         run: |
+          # Skip activity check when manually triggered.
           if [ "${{ github.event_name }}" == "repository_dispatch" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             is_active=true
           elif [ "$(git rev-list --after="24 hours" ${{ github.sha }})" ]; then
@@ -54,6 +59,7 @@ jobs:
         id: version
         run: |
           $RELEASE_SCRIPT bump
+          # Ensure newlines at the end of file
           shopt -s globstar
           sed -i -e '$a\' **/package.json
 
@@ -61,8 +67,13 @@ jobs:
         if: steps.activity.outputs.is_active == 'true'
         id: commit
         run: |
+          # Print diff for debugging
           git diff
+
+          # For nightly we do not want to commit those changes,
+          # save them and then apply when building
           git diff > /tmp/nightly-release.patch
+
           revision=$(git rev-parse HEAD)
           echo "revision=$revision" | tee -a $GITHUB_OUTPUT
 
@@ -96,20 +107,12 @@ jobs:
       matrix:
         include:
           - build_name: linux-x86_64
-            os: ubuntu-22.04
+            os: ubuntu-20.04
 
           - build_name: linux-aarch64
-            os: ubuntu-22.04-arm
+            os: ubuntu-20.04-arm
 
-          # S905L3A 专用静态编译目标
-          - build_name: linux-s905l3a-musl
-            os: ubuntu-22.04
-            target: aarch64-unknown-linux-musl
-            link_type: static
-            RUSTFLAGS: '-C target-feature=+crt-static -C link-arg=-s'
-            DESKTOP_FEATURES: "jpegxr,disable-dynamic-linking"
-            ARCH_NAME: "aarch64"
-
+          # Mac does two Rust builds to make a universal binary
           - build_name: macos-x86_64
             os: macos-14
             target: x86_64-apple-darwin
@@ -160,17 +163,8 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.target }}
 
-      # 为 S905L3A 安装 musl 工具链
-      - name: Install musl-tools for S905L3A
-        if: matrix.build_name == 'linux-s905l3a-musl'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools musl-dev
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          ln -s /usr/bin/aarch64-linux-gnu-gcc /usr/bin/musl-gcc
-
       - name: Install Linux dependencies
-        if: runner.os == 'Linux' && matrix.build_name != 'linux-s905l3a-musl'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt install -y libasound2-dev libudev-dev
@@ -183,20 +177,7 @@ jobs:
           wix extension add -g WixToolset.Util.wixext/5.0.2
 
       - name: Cargo build
-        run: |
-          # 为 S905L3A 设置静态链接
-          if [[ "${{ matrix.build_name }}" == "linux-s905l3a-musl" ]]; then
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld
-            export RUSTFLAGS="${{ matrix.RUSTFLAGS }} -C target-feature=+crt-static"
-            cargo build --locked --package ruffle_desktop --release \
-              ${{matrix.DESKTOP_FEATURES && '--features' }} ${{matrix.DESKTOP_FEATURES}} \
-              --target ${{ matrix.target }} \
-              --config "target.{{ matrix.target }}.linker=rust-lld"
-          else
-            cargo build --locked --package ruffle_desktop --release \
-              ${{matrix.DESKTOP_FEATURES && '--features' }} ${{matrix.DESKTOP_FEATURES}} \
-              ${{ matrix.target && '--target' }} ${{ matrix.target }}
-          fi
+        run: cargo build --locked --package ruffle_desktop --release ${{matrix.DESKTOP_FEATURES && '--features' }} ${{matrix.DESKTOP_FEATURES}} ${{ matrix.target && '--target' }} ${{ matrix.target }}
         env:
           CFG_RELEASE_CHANNEL: nightly
           RUSTFLAGS: ${{ matrix.RUSTFLAGS }}
@@ -209,13 +190,13 @@ jobs:
           cp LICENSE.md package/LICENSE.md
 
       - name: Package MSI
-        if: runner.os == 'Windows'
         run: |
           cd desktop/packages/windows/wix
           wix build ruffle.wxs -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext -arch ${{ matrix.MSI_ARCH }} -o ../../../../package/setup.msi -pdbtype none
         env:
           RUFFLE_VERSION: ${{ needs.create-nightly-release.outputs.version4 }}
           CARGO_BUILD_DIR: ../../../../target/${{ matrix.target }}/release
+        if: runner.os == 'Windows'
 
       - name: Package Windows
         if: runner.os == 'Windows'
@@ -223,49 +204,18 @@ jobs:
           cp ${{ env.CARGO_BUILD_DIR }}/ruffle_desktop.exe package/ruffle.exe
           7z a ${{ env.PACKAGE_FILE }} ./package/*
 
-      - name: Package Linux (standard)
-        if: runner.os == 'Linux' && matrix.build_name != 'linux-s905l3a-musl'
+      - name: Package Linux
+        if: runner.os == 'Linux'
         run: |
           cp ${{ env.CARGO_BUILD_DIR }}/ruffle_desktop package/ruffle
+
+          # Package extras
           mkdir -p package/extras
           cp desktop/packages/linux/rs.ruffle.Ruffle.desktop package/extras
           cp desktop/packages/linux/rs.ruffle.Ruffle.metainfo.xml package/extras
           cp desktop/packages/linux/rs.ruffle.Ruffle.svg package/extras
-          cd package
-          tar -czvf ../${{ env.PACKAGE_FILE }} *
 
-      # S905L3A 专用打包
-      - name: Package for S905L3A
-        if: matrix.build_name == 'linux-s905l3a-musl'
-        run: |
-          cp ${{ env.CARGO_BUILD_DIR }}/ruffle_desktop package/ruffle
-          
-          # 添加 EmuELEC 专用启动脚本
-          cat << 'EOF' > package/run_ruffle.sh
-          #!/bin/sh
-          
-          # EmuELEC 4.7 专用设置
-          export LD_LIBRARY_PATH="/tmp/mesa/lib:$LD_LIBRARY_PATH"
-          export GPU_NAME="Mali-G31"
-          export PAN_MESA_DEBUG="gl3"
-          export GALLIUM_DRIVER="panfrost"
-          export MESA_GLSL_VERSION_OVERRIDE="100"
-          export MESA_GL_VERSION_OVERRIDE="2.1"
-          export LIBGL_ALWAYS_SOFTWARE="0"
-          
-          # S905L3A GPU 优化参数
-          export PAN_NO_CONVERSION="1"
-          export PAN_DEBUG="nocsvc,notiler"
-          export GALLIUM_THREAD="1"
-          export MESA_LOADER_DRIVER_OVERRIDE="panfrost"
-          
-          # 启动 Ruffle
-          ./ruffle --graphics gl --power low --scale show-all "$@"
-          EOF
-          
-          chmod +x package/run_ruffle.sh
-          echo "Built for S905L3A/Mali-G31 on $(date)" > package/build-info.txt
-          
+          # We must enter the package/ directory in order to create a flat tarball (i.e. without a directory in it).
           cd package
           tar -czvf ../${{ env.PACKAGE_FILE }} *
 
@@ -382,6 +332,7 @@ jobs:
 
       - name: Package macOS
         run: |
+          # We must enter the package/ directory in order to create a flat tarball (i.e. without a directory in it).
           cd package
           tar -czvf ../${{ env.PACKAGE_FILE }} *
 
@@ -394,7 +345,7 @@ jobs:
     name: Build AVM2 stub repository
     needs: create-nightly-release
     if: needs.create-nightly-release.outputs.is_active == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     steps:
       - name: Clone Ruffle repo
         uses: actions/checkout@v4
@@ -412,11 +363,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # The first couple steps of this and the `build-web-demo-and-selfhosted` job
+  # (tool setup and dependency install) are identical. Hopefully in the future
+  # https://github.com/actions/runner/issues/1182 can help deduplicate them.
   build-browser-extensions:
     name: Build browser extensions
     needs: create-nightly-release
     if: needs.create-nightly-release.outputs.is_active == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     permissions:
       actions: read
       attestations: write
@@ -451,9 +405,14 @@ jobs:
           node-version: "22"
           registry-url: https://registry.npmjs.org
 
+      # wasm-bindgen-cli version must match wasm-bindgen crate version.
+      # Be sure to update in test_web.yml, Cargo.toml, web/docker/Dockerfile,
+      # and web/README.md as well.
       - name: Install wasm-bindgen
         run: cargo install wasm-bindgen-cli --version 0.2.100
 
+      # Keep the version number in sync in all workflows,
+      # and in the extension builder Dockerfile!
       - name: Install wasm-opt
         uses: sigoden/install-binary@v1
         with:
@@ -473,7 +432,7 @@ jobs:
           CFG_RELEASE_CHANNEL: nightly
           VERSION4: ${{ needs.create-nightly-release.outputs.version4 }}
           ENABLE_VERSION_SEAL: "true"
-          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }} # Needed to inject into manifest.json
         run: npm run version-seal
 
       - name: Build web
@@ -481,7 +440,7 @@ jobs:
           CFG_RELEASE_CHANNEL: nightly
           VERSION4: ${{ needs.create-nightly-release.outputs.version4 }}
           CARGO_FEATURES: jpegxr
-          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }} # Needed to inject into manifest.json
           WASM_SOURCE: cargo_and_store
         working-directory: web
         shell: bash -l {0}
@@ -572,7 +531,7 @@ jobs:
     name: Build web demo and selfhosted package with docs, and release assets for dual-wasm extensions
     needs: create-nightly-release
     if: needs.create-nightly-release.outputs.is_active == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     permissions:
       actions: read
       attestations: write
@@ -607,9 +566,14 @@ jobs:
           node-version: "22"
           registry-url: https://registry.npmjs.org
 
+      # wasm-bindgen-cli version must match wasm-bindgen crate version.
+      # Be sure to update in test_web.yml, Cargo.toml, web/docker/Dockerfile,
+      # and web/README.md as well.
       - name: Install wasm-bindgen
         run: cargo install wasm-bindgen-cli --version 0.2.100
 
+      # Keep the version number in sync in all workflows,
+      # and in the extension builder Dockerfile!
       - name: Install wasm-opt
         uses: sigoden/install-binary@v1
         with:
@@ -629,20 +593,23 @@ jobs:
           CFG_RELEASE_CHANNEL: nightly
           VERSION4: ${{ needs.create-nightly-release.outputs.version4 }}
           ENABLE_VERSION_SEAL: "true"
-          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }} # Needed to inject into manifest.json
         run: npm run version-seal
 
       - name: Build web
         env:
           CFG_RELEASE_CHANNEL: nightly
           VERSION4: ${{ needs.create-nightly-release.outputs.version4 }}
+          # NOTE: In the future, we might want to enable some features (like `webgpu`) only in
+          # the demo build, for limited testing (like a Chrome origin trial) on ruffle.rs.
           CARGO_FEATURES: jpegxr
-          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }} # Needed to inject into manifest.json
           WASM_SOURCE: cargo_and_store
         working-directory: web
         shell: bash -l {0}
         run: npm run build:dual-wasm-repro
 
+      # NOTE: This is done here because the job that builds the extensions for publication doesn't have the vanilla (MVP) WASM modules, but for the selfhosted package we build them both
       - name: Upload dual-wasm generic extension
         run: |
           tag_name="${{ needs.create-nightly-release.outputs.tag_name }}"
@@ -668,6 +635,7 @@ jobs:
         run: npm run docs
 
       - name: Publish npm package
+        # npm scoped packages are private by default, explicitly make public
         run: npm publish --access public --provenance
         continue-on-error: true
         working-directory: web/packages/selfhosted/dist
@@ -694,12 +662,17 @@ jobs:
           path: js-docs
           ref: master
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: false # Needed to allow commit via RUFFLE_BUILD_TOKEN below
 
       - name: Update JS docs
         run: |
+          # Delete the old docs
           rm -rf master/
+
+          # Copy the fresh docs into this folder.
           cp -r ../web/packages/core/docs master
+
+          # Create git commit. Amend previous commit to avoid daily commit spam.
           git config user.name "RuffleBuild"
           git config user.email "ruffle@ruffle.rs"
           git add -A
@@ -722,13 +695,20 @@ jobs:
           path: demo
           ref: master
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: false # Needed to allow commit via RUFFLE_BUILD_TOKEN below
 
       - name: Update web demo
         run: |
+          # Delete the old build.
           rm -fr *
+
+          # Copy the fresh build into this folder.
           cp -fr ../web/packages/demo/dist/* .
+
+          # Restore our custom swfs
           git restore swfs swfs.json
+
+          # Create git commit. Amend previous commit to avoid daily commit spam.
           git config user.name "RuffleBuild"
           git config user.email "ruffle@ruffle.rs"
           git add -A
@@ -747,7 +727,7 @@ jobs:
   publish-aur-package:
     name: Publish AUR package
     needs: [create-nightly-release, build]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     if: github.repository == 'ruffle-rs/ruffle'
     steps:
       - uses: actions/checkout@v4
