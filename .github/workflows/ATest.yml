@@ -1,4 +1,4 @@
-name: Release Nightly
+name: A Release Euffle ee4.7
 
 on:
   # Run nightly
