@@ -87,7 +87,7 @@ jobs:
       PACKAGE_FILE: ${{ needs.create-nightly-release.outputs.package_prefix }}-s905l3a-gles.tar.gz
       CARGO_BUILD_DIR: target/aarch64-unknown-linux-gnu/release
       TARGET: aarch64-unknown-linux-gnu
-      FEATURES: gles  # 关键修改：使用OpenGL ES后端
+      FEATURES: gl  # 关键修改：使用OpenGL ES后端
 
     runs-on: ubuntu-22.04
     steps:
