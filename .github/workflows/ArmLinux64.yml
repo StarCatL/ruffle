@@ -1,0 +1,170 @@
+name: Release Nightly for S905L3A
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+env:
+  RELEASE_SCRIPT: ./.github/scripts/release.py
+
+jobs:
+  create-nightly-release:
+    name: Create Nightly Release
+    runs-on: ubuntu-22.04
+    outputs:
+      is_active: ${{ steps.activity.outputs.is_active }}
+      date: ${{ steps.current_time_underscores.outputs.formattedTime }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      package_prefix: ${{ steps.create_release.outputs.package_prefix }}
+      tag_name: ${{ steps.commit.outputs.tag_name }}
+      version4: ${{ steps.version.outputs.version4 }}
+
+    if: github.repository == 'ruffle-rs/ruffle' || github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for repo activity
+        id: activity
+        run: |
+          if [ "${{ github.event_name }}" == "repository_dispatch" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            is_active=true
+          elif [ "$(git rev-list --after="24 hours" ${{ github.sha }})" ]; then
+            is_active=true
+          else
+            is_active=false
+          fi
+          echo "is_active=$is_active" >> $GITHUB_OUTPUT
+
+      - name: Install cargo-edit
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: cargo-edit
+          version: '^0.12'
+
+      - name: Install cargo-get
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: cargo-get
+          version: '^1.0'
+
+      - name: Bump version
+        if: steps.activity.outputs.is_active == 'true'
+        id: version
+        run: |
+          $RELEASE_SCRIPT bump
+          shopt -s globstar
+          sed -i -e '$a\' **/package.json
+
+      - name: Create release commit
+        if: steps.activity.outputs.is_active == 'true'
+        id: commit
+        run: |
+          $RELEASE_SCRIPT commit
+          $RELEASE_SCRIPT tag-and-push
+
+      - name: Get current time with underscores
+        uses: josStorer/get-current-time@v2.1.2
+        id: current_time_underscores
+        with:
+          format: YYYY_MM_DD
+
+      - name: Create release
+        if: steps.activity.outputs.is_active == 'true'
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $RELEASE_SCRIPT release
+
+  build-s905l3a:
+    name: Build for S905L3A (GLES)
+    needs: create-nightly-release
+    if: needs.create-nightly-release.outputs.is_active == 'true'
+    
+    env:
+      PACKAGE_FILE: ${{ needs.create-nightly-release.outputs.package_prefix }}-s905l3a-gles.tar.gz
+      CARGO_BUILD_DIR: target/aarch64-unknown-linux-gnu/release
+      TARGET: aarch64-unknown-linux-gnu
+      FEATURES: gles  # 关键修改：使用OpenGL ES后端
+
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Clone Ruffle repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-nightly-release.outputs.tag_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Install GLES dependencies
+        run: |
+          sudo apt-get update
+          # 安装OpenGL ES开发库和ARM交叉编译依赖
+          sudo apt install -y \
+            libgles2-mesa-dev \
+            libegl1-mesa-dev \
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu \
+            libc6-dev-arm64-cross
+
+      - name: Build Ruffle with GLES support
+        run: |
+          # 为ARM64目标构建，启用GLES特性
+          cargo build --locked --package ruffle_desktop \
+            --release \
+            --target ${{ env.TARGET }} \
+            --features ${{ env.FEATURES }}
+        env:
+          CFG_RELEASE_CHANNEL: nightly
+          # 设置交叉编译环境变量
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig
+          RUSTFLAGS: "-C linker=aarch64-linux-gnu-gcc"
+
+      - name: Prepare package directory
+        run: |
+          mkdir -p package/usr/bin
+          mkdir -p package/usr/share/ruffle
+
+      - name: Copy ARM64 binary
+        run: |
+          cp ${{ env.CARGO_BUILD_DIR }}/ruffle_desktop package/usr/bin/ruffle
+
+      - name: Add Linux extras
+        run: |
+          mkdir -p package/usr/share/applications
+          mkdir -p package/usr/share/metainfo
+          mkdir -p package/usr/share/icons/hicolor/scalable/apps
+          
+          cp desktop/packages/linux/rs.ruffle.Ruffle.desktop package/usr/share/applications/
+          cp desktop/packages/linux/rs.ruffle.Ruffle.metainfo.xml package/usr/share/metainfo/
+          cp desktop/packages/linux/rs.ruffle.Ruffle.svg package/usr/share/icons/hicolor/scalable/apps/
+
+      - name: Add launcher script
+        run: |
+          cat > package/usr/bin/ruffle-launcher << 'EOF'
+          #!/bin/sh
+          # 确保使用正确的GLES驱动
+          export LIBGL_ES=1
+          export MESA_GL_VERSION_OVERRIDE=3.0
+          export MESA_GLES_VERSION_OVERRIDE=3.0
+          exec /usr/bin/ruffle "$@"
+          EOF
+          chmod +x package/usr/bin/ruffle-launcher
+
+      - name: Create tarball
+        run: |
+          cd package
+          tar -czvf ../${{ env.PACKAGE_FILE }} *
+
+      - name: Upload release artifact
+        run: |
+          gh release upload "${{ needs.create-nightly-release.outputs.tag_name }}" "${{ env.PACKAGE_FILE }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
