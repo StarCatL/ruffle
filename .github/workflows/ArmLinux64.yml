@@ -1,4 +1,4 @@
-name: Release Nightly for S905L3A
+name: Linux ARM64 Release
 
 on:
   schedule:
@@ -78,18 +78,23 @@ jobs:
         run: |
           $RELEASE_SCRIPT release
 
-  build-s905l3a:
-    name: Build for S905L3A (GLES)
+  build-linux:  # 重命名任务以明确目的
+    name: Build Linux for S905L3A
     needs: create-nightly-release
     if: needs.create-nightly-release.outputs.is_active == 'true'
-    
-    env:
-      PACKAGE_FILE: ${{ needs.create-nightly-release.outputs.package_prefix }}-s905l3a-gles.tar.gz
-      CARGO_BUILD_DIR: target/aarch64-unknown-linux-gnu/release
-      TARGET: aarch64-unknown-linux-gnu
-      FEATURES: gl  # 关键修改：使用OpenGL ES后端
+    strategy:
+      matrix:
+        include:
+          - build_name: linux-aarch64  # 只构建ARM64架构
+            target: aarch64-unknown-linux-gnu  # 明确指定ARM64目标
+            features: "gl"  # 启用OpenGL支持
+            os: ubuntu-22.04  # 使用Ubuntu 22.04
 
-    runs-on: ubuntu-22.04
+    env:
+      PACKAGE_FILE: ${{ needs.create-nightly-release.outputs.package_prefix }}-${{ matrix.build_name }}.tar.gz
+      CARGO_BUILD_DIR: target/${{ matrix.target }}/release
+
+    runs-on: ${{ matrix.os }}  # 使用Ubuntu 22.04运行器
     steps:
       - name: Clone Ruffle repo
         uses: actions/checkout@v4
@@ -100,63 +105,38 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          targets: aarch64-unknown-linux-gnu
+          targets: ${{ matrix.target }}  # 安装ARM64目标支持
 
-      - name: Install GLES dependencies
+      - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          # 安装OpenGL ES开发库和ARM交叉编译依赖
-          sudo apt install -y \
-            libgles2-mesa-dev \
-            libegl1-mesa-dev \
-            gcc-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu \
-            libc6-dev-arm64-cross
+          sudo apt install -y libasound2-dev libudev-dev
 
-      - name: Build Ruffle with GLES support
+      - name: Build Ruffle for ARM64
         run: |
-          # 为ARM64目标构建，启用GLES特性
           cargo build --locked --package ruffle_desktop \
             --release \
-            --target ${{ env.TARGET }} \
-            --features ${{ env.FEATURES }}
+            --target ${{ matrix.target }} \
+            --features ${{ matrix.features }}  # 启用OpenGL支持
         env:
           CFG_RELEASE_CHANNEL: nightly
-          # 设置交叉编译环境变量
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-          PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig
-          RUSTFLAGS: "-C linker=aarch64-linux-gnu-gcc"
 
       - name: Prepare package directory
         run: |
-          mkdir -p package/usr/bin
-          mkdir -p package/usr/share/ruffle
+          mkdir package
+          cp README.md package/README.md
+          cp LICENSE.md package/LICENSE.md
 
       - name: Copy ARM64 binary
         run: |
-          cp ${{ env.CARGO_BUILD_DIR }}/ruffle_desktop package/usr/bin/ruffle
+          cp ${{ env.CARGO_BUILD_DIR }}/ruffle_desktop package/ruffle
 
       - name: Add Linux extras
         run: |
-          mkdir -p package/usr/share/applications
-          mkdir -p package/usr/share/metainfo
-          mkdir -p package/usr/share/icons/hicolor/scalable/apps
-          
-          cp desktop/packages/linux/rs.ruffle.Ruffle.desktop package/usr/share/applications/
-          cp desktop/packages/linux/rs.ruffle.Ruffle.metainfo.xml package/usr/share/metainfo/
-          cp desktop/packages/linux/rs.ruffle.Ruffle.svg package/usr/share/icons/hicolor/scalable/apps/
-
-      - name: Add launcher script
-        run: |
-          cat > package/usr/bin/ruffle-launcher << 'EOF'
-          #!/bin/sh
-          # 确保使用正确的GLES驱动
-          export LIBGL_ES=1
-          export MESA_GL_VERSION_OVERRIDE=3.0
-          export MESA_GLES_VERSION_OVERRIDE=3.0
-          exec /usr/bin/ruffle "$@"
-          EOF
-          chmod +x package/usr/bin/ruffle-launcher
+          mkdir -p package/extras
+          cp desktop/packages/linux/rs.ruffle.Ruffle.desktop package/extras
+          cp desktop/packages/linux/rs.ruffle.Ruffle.metainfo.xml package/extras
+          cp desktop/packages/linux/rs.ruffle.Ruffle.svg package/extras
 
       - name: Create tarball
         run: |
